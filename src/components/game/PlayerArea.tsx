@@ -16,6 +16,7 @@ interface PlayerAreaProps {
   onDraw: () => void
   onCallUno: () => void
   onCancel: () => void
+  onGiveUp: () => void
   selectedIds: Set<string>
   onToggleSelect: (id: string, multi: boolean) => void
 }
@@ -32,6 +33,7 @@ export default function PlayerArea({
   onDraw,
   onCallUno,
   onCancel,
+  onGiveUp,
   selectedIds,
   onToggleSelect,
 }: PlayerAreaProps) {
@@ -89,7 +91,7 @@ export default function PlayerArea({
             className="flex items-center gap-2 justify-center flex-wrap"
           >
             <Button
-              variant="primary"
+              variant="success"
               size="sm"
               onClick={onCommit}
               disabled={!canCommit}
@@ -112,16 +114,27 @@ export default function PlayerArea({
               variant="ghost"
               size="sm"
               onClick={onCancel}
-              disabled={tilesPlayedCount === 0}
               data-testid="cancel-btn"
             >
-              ↩ Cancel
+              ↺ Reset Board
             </Button>
 
             <UnoButton
               visible={tiles.length <= 2 || hasUnoCallPending}
               onClick={onCallUno}
             />
+
+            <span className="text-white/20 select-none">|</span>
+
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={onGiveUp}
+              data-testid="give-up-btn"
+              style={{ opacity: 0.75 }}
+            >
+              ☠ Give Up
+            </Button>
           </motion.div>
         )}
       </AnimatePresence>

@@ -1,12 +1,15 @@
+import { useCallback, useEffect, useRef } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import { AnimatePresence } from 'framer-motion'
 import type { TileGroup } from '@/engine/types'
 import TileGroupComponent from './TileGroup'
+import { useGameStore } from '@/store/gameStore'
 
 interface TableCanvasProps {
   groups: TileGroup[]
   selectedTileIds: Set<string>
   onTileClick: (tileId: string) => void
+  onSplit?: (groupId: string, splitIndex: number) => void
   shakeGroupIds?: Set<string>
   insertIndicator?: { groupId: string; index: number } | null
   readOnly?: boolean
@@ -17,16 +20,35 @@ export default function TableCanvas({
   groups,
   selectedTileIds,
   onTileClick,
+  onSplit,
   shakeGroupIds = new Set(),
   insertIndicator,
   readOnly = false,
   draggable = false,
 }: TableCanvasProps) {
   const { setNodeRef, isOver } = useDroppable({ id: 'table-canvas' })
+  const setCanvasSize = useGameStore(s => s.setCanvasSize)
+  const canvasRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const el = canvasRef.current
+    if (!el) return
+    const ro = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect
+      setCanvasSize(Math.round(width), Math.round(height))
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [setCanvasSize])
+
+  const combinedRef = useCallback((node: HTMLDivElement | null) => {
+    setNodeRef(node)
+    canvasRef.current = node
+  }, [setNodeRef])
 
   return (
     <div
-      ref={setNodeRef}
+      ref={combinedRef}
       className={`
         felt-table relative w-full h-full rounded-xl overflow-hidden
         transition-all duration-200
@@ -42,6 +64,7 @@ export default function TableCanvas({
             group={group}
             selectedTileIds={selectedTileIds}
             onTileClick={readOnly ? undefined : onTileClick}
+            onSplit={readOnly ? undefined : onSplit}
             shake={shakeGroupIds.has(group.id)}
             insertIndicatorIndex={
               insertIndicator?.groupId === group.id ? insertIndicator.index : null

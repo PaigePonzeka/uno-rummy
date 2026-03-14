@@ -12,7 +12,7 @@ import {
 import { arrayMove } from '@dnd-kit/sortable'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useGameStore } from '@/store/gameStore'
-import type { Player } from '@/engine/types'
+import type { LastFiredEffect, Player } from '@/engine/types'
 import { moveTileBetweenGroups, createGroupFromTiles, moveGroup } from '@/engine/manipulationEngine'
 import { isValidSet } from '@/engine/validationEngine'
 import { findFreePosition } from '@/engine/deckGenerator'
@@ -23,6 +23,7 @@ import DrawPile from './DrawPile'
 import ScoreBoard from './ScoreBoard'
 import Toast, { useToast } from '@/components/ui/Toast'
 import { useCpuTurns } from '@/hooks/useGameLoop'
+import { useSound } from '@/hooks/useSound'
 import Tile from './Tile'
 
 export default function GameBoard() {
@@ -32,6 +33,8 @@ export default function GameBoard() {
   const tableGroups        = useGameStore(s => s.tableGroups)
   const drawPile           = useGameStore(s => s.drawPile)
   const tilesPlayedThisTurn = useGameStore(s => s.tilesPlayedThisTurn)
+  const turnDirection       = useGameStore(s => s.turnDirection)
+  const lastFiredEffect     = useGameStore(s => s.lastFiredEffect)
 
   const playTilesFromRack = useGameStore(s => s.playTilesFromRack)
   const rearrangeTable    = useGameStore(s => s.rearrangeTable)
@@ -39,7 +42,9 @@ export default function GameBoard() {
   const drawTile          = useGameStore(s => s.drawTile)
   const callUno           = useGameStore(s => s.callUno)
   const cancelTurn        = useGameStore(s => s.cancelTurn)
+  const resetGame         = useGameStore(s => s.resetGame)
   const returnTileToRack  = useGameStore(s => s.returnTileToRack)
+  const splitTableGroup   = useGameStore(s => s.splitTableGroup)
 
   const humanPlayer = players[0]
 
@@ -54,6 +59,7 @@ export default function GameBoard() {
   const prevDrawPileLenRef = useRef(drawPile.length)
 
   const { toasts, addToast, dismiss } = useToast()
+  const { play } = useSound()
 
   // ── CPU turn orchestration ──────────────────────────────
   useCpuTurns()
@@ -80,6 +86,12 @@ export default function GameBoard() {
     }
     prevDrawPileLenRef.current = drawPile.length
   }, [drawPile.length]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Special card effect announcements ───────────────────
+  useEffect(() => {
+    if (!lastFiredEffect) return
+    showBanner(formatEffectBanner(lastFiredEffect, humanPlayer?.name ?? 'You'))
+  }, [lastFiredEffect]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Rack order state (for manual reordering) ────────────
   useEffect(() => {
@@ -109,7 +121,7 @@ export default function GameBoard() {
     const selectedTiles = humanRack.filter(t => selectedIds.has(t.id))
     if (selectedTiles.length !== selectedIds.size) return
     if (!isValidSet(selectedTiles)) return
-    const pos = findFreePosition(tableGroups)
+    const pos = findFreePosition(tableGroups, selectedTiles.length)
     const result = playTilesFromRack([...selectedIds], null, 0, pos)
     if (result?.success !== false) setSelectedIds(new Set())
   }, [selectedIds]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -133,6 +145,13 @@ export default function GameBoard() {
   function handleDraw() {
     showBanner('You drew a tile')
     drawTile()
+  }
+
+  // ── UNO handler (banner + sound) ─────────────────────────
+  function handleCallUno() {
+    callUno()
+    showBanner('UNO!')
+    play('unoCall')
   }
 
   // ── DnD sensors ─────────────────────────────────────────
@@ -306,6 +325,9 @@ export default function GameBoard() {
               compact={cpuPlayers.length > 2}
             />
           ))}
+          <div className="ml-auto flex-shrink-0 flex items-center pr-1">
+            <TurnDirectionIndicator direction={turnDirection} />
+          </div>
         </div>
 
         {/* Center: table + sidebar */}
@@ -315,6 +337,7 @@ export default function GameBoard() {
               groups={tableGroups}
               selectedTileIds={selectedIds}
               onTileClick={(id) => handleToggleSelect(id, false)}
+              onSplit={splitTableGroup}
               shakeGroupIds={shakeGroupIds}
               insertIndicator={insertIndicator}
               readOnly={phase !== 'PLAYER_TURN'}
@@ -347,8 +370,9 @@ export default function GameBoard() {
               canCommit={tilesPlayedThisTurn.length > 0}
               onCommit={handleCommit}
               onDraw={handleDraw}
-              onCallUno={callUno}
+              onCallUno={handleCallUno}
               onCancel={cancelTurn}
+              onGiveUp={() => { if (window.confirm('Give up and return to the start screen?')) resetGame() }}
               selectedIds={selectedIds}
               onToggleSelect={handleToggleSelect}
             />
@@ -361,6 +385,44 @@ export default function GameBoard() {
         </AnimatePresence>
       </div>
     </DndContext>
+  )
+}
+
+// ── Special effect banner text ───────────────────────────────
+
+function formatEffectBanner(effect: LastFiredEffect, humanName: string): string {
+  const actor  = effect.actorName  === humanName ? 'You'  : effect.actorName
+  const target = effect.targetName === humanName ? 'you'  : effect.targetName
+  const targetCap = effect.targetName === humanName ? 'You' : effect.targetName
+
+  switch (effect.type) {
+    case 'skip':        return `${actor} played Skip — ${targetCap} ${target === 'you' ? 'are' : 'is'} skipped!`
+    case 'draw2':       return `${actor} played Draw 2 — ${targetCap} draw${target === 'you' ? '' : 's'} 2!`
+    case 'reverse':     return `${actor} played Reverse — turn order flipped!`
+    case 'wildDrawFour':return `${actor} played Wild +4 — ${targetCap} draw${target === 'you' ? '' : 's'} 4!`
+    default:            return 'Special card played!'
+  }
+}
+
+// ── Turn direction indicator ──────────────────────────────────
+
+function TurnDirectionIndicator({ direction }: { direction: 1 | -1 }) {
+  return (
+    <motion.div
+      animate={{ scaleX: direction === 1 ? 1 : -1 }}
+      transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+      title={direction === 1 ? 'Clockwise' : 'Counter-clockwise'}
+      style={{
+        fontSize:        22,
+        color:           'rgba(255,255,255,0.45)',
+        display:         'inline-block',
+        transformOrigin: 'center',
+        userSelect:      'none',
+        lineHeight:      1,
+      }}
+    >
+      ↻
+    </motion.div>
   )
 }
 

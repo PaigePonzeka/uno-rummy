@@ -1,3 +1,4 @@
+import { useRef, useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { Player } from '@/engine/types'
 import { TileBack } from './Tile'
@@ -12,7 +13,30 @@ interface CpuAreaProps {
 }
 
 export default function CpuArea({ player, isThinking, isCurrentTurn, compact }: CpuAreaProps) {
-  const creatureKey = player.creatureKey as ZooCreatureKey
+  const creatureKey    = player.creatureKey as ZooCreatureKey
+  const containerRef   = useRef<HTMLDivElement>(null)
+  const [visibleCount, setVisibleCount] = useState(player.rack.length)
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const TILE_W  = 42  // 40px tile + 2px gap
+    const BADGE_W = 36  // approximate width of "+ X" badge
+
+    const compute = () => {
+      const available = el.offsetWidth
+      const fits = Math.floor(available / TILE_W)
+      const overflow = player.rack.length > fits
+      setVisibleCount(
+        overflow ? Math.max(1, Math.floor((available - BADGE_W) / TILE_W)) : player.rack.length
+      )
+    }
+
+    compute()
+    const ro = new ResizeObserver(compute)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [player.rack.length])
 
   return (
     <div className={`
@@ -58,11 +82,16 @@ export default function CpuArea({ player, isThinking, isCurrentTurn, compact }: 
         </AnimatePresence>
       </div>
 
-      {/* Face-down tiles in a single scrollable row */}
-      <div className="flex flex-row gap-0.5 overflow-x-auto" style={{ maxHeight: 44 }}>
-        {player.rack.map((_, i) => (
+      {/* Face-down tiles — clip to container width, badge for overflow */}
+      <div ref={containerRef} className="flex flex-row gap-0.5 overflow-hidden flex-1" style={{ maxHeight: 44 }}>
+        {player.rack.slice(0, visibleCount).map((_, i) => (
           <TileBack key={i} small />
         ))}
+        {player.rack.length > visibleCount && (
+          <div className="flex items-center justify-center text-white/70 text-xs font-bold px-1 shrink-0 whitespace-nowrap">
+            +{player.rack.length - visibleCount}
+          </div>
+        )}
       </div>
     </div>
   )

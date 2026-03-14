@@ -8,6 +8,7 @@ interface TileGroupProps {
   group: TileGroupData
   selectedTileIds?: Set<string>
   onTileClick?: (tileId: string) => void
+  onSplit?: (groupId: string, splitIndex: number) => void
   shake?: boolean
   isDragOver?: boolean
   insertIndicatorIndex?: number | null
@@ -82,6 +83,7 @@ export default function TileGroupComponent({
   group,
   selectedTileIds = new Set(),
   onTileClick,
+  onSplit,
   shake = false,
   isDragOver = false,
   insertIndicatorIndex = null,
@@ -104,14 +106,14 @@ export default function TileGroupComponent({
         ${isHovered ? 'bg-white/20 scale-105' : 'bg-black/20'}
       `}
       style={{
-        position:    'absolute',
+        position:   'absolute',
         left:        group.position.x,
         top:         group.position.y,
+        transition:  shake
+          ? 'none'
+          : 'left 0.55s cubic-bezier(0.175, 0.885, 0.32, 1.275), top 0.55s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
         cursor:      draggable ? 'default' : 'grab',
-        paddingTop:  draggable ? 16 : 8,
-        paddingBottom: 8,
-        paddingLeft: 8,
-        paddingRight: 8,
+        padding:     8,
       }}
     >
       {/* Group drag handle */}
@@ -126,10 +128,40 @@ export default function TileGroupComponent({
               {insertIndicatorIndex === idx && (
                 <div className="w-0.5 h-14 bg-white rounded-full mx-0.5 animate-pulse" />
               )}
+              {/* Split button — appears between tiles at valid split points */}
+              {draggable && onSplit && group.type === 'run' && group.tiles.length >= 6
+                && idx >= 2 && idx <= group.tiles.length - 4 && (
+                <button
+                  onPointerDown={e => e.stopPropagation()}
+                  onClick={e => { e.stopPropagation(); onSplit(group.id, idx + 1) }}
+                  title="Split run here"
+                  style={{
+                    width: 10, height: 36, flexShrink: 0,
+                    background: 'rgba(255,255,255,0.12)',
+                    border: '1px dashed rgba(255,255,255,0.35)',
+                    borderRadius: 3, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: 'rgba(255,255,255,0.5)', fontSize: 8,
+                    transition: 'background 0.15s, color 0.15s',
+                    marginRight: 2,
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.28)'
+                    e.currentTarget.style.color = 'rgba(255,255,255,0.9)'
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.12)'
+                    e.currentTarget.style.color = 'rgba(255,255,255,0.5)'
+                  }}
+                >
+                  ✂
+                </button>
+              )}
               {draggable ? (
                 <DraggableTableTile tile={tile} groupId={group.id}>
                   <TileComponent
                     tile={tile}
+                    noLayoutId
                     selected={selectedTileIds.has(tile.id)}
                     onClick={onTileClick ? () => onTileClick(tile.id) : undefined}
                   />
@@ -137,6 +169,7 @@ export default function TileGroupComponent({
               ) : (
                 <TileComponent
                   tile={tile}
+                  noLayoutId
                   selected={selectedTileIds.has(tile.id)}
                   onClick={onTileClick ? () => onTileClick(tile.id) : undefined}
                 />

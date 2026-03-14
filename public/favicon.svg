@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <defs>
+    <clipPath id="circle-clip">
+      <circle cx="16" cy="16" r="15"/>
+    </clipPath>
+  </defs>
+
+  <!-- 4 colored quadrants clipped to circle -->
+  <!-- Top-left: Red -->
+  <rect x="0" y="0" width="16" height="16" fill="#D72600" clip-path="url(#circle-clip)"/>
+  <!-- Top-right: Blue -->
+  <rect x="16" y="0" width="16" height="16" fill="#0956BF" clip-path="url(#circle-clip)"/>
+  <!-- Bottom-left: Green -->
+  <rect x="0" y="16" width="16" height="16" fill="#379711" clip-path="url(#circle-clip)"/>
+  <!-- Bottom-right: Yellow -->
+  <rect x="16" y="16" width="16" height="16" fill="#ECD407" clip-path="url(#circle-clip)"/>
+
+  <!-- Thin dividing lines -->
+  <line x1="16" y1="1" x2="16" y2="31" stroke="rgba(0,0,0,0.25)" stroke-width="1" clip-path="url(#circle-clip)"/>
+  <line x1="1" y1="16" x2="31" y2="16" stroke="rgba(0,0,0,0.25)" stroke-width="1" clip-path="url(#circle-clip)"/>
+
+  <!-- Outer circle border -->
+  <circle cx="16" cy="16" r="15" fill="none" stroke="rgba(0,0,0,0.2)" stroke-width="1"/>
+
+  <!-- Center white circle (tile oval accent) -->
+  <circle cx="16" cy="16" r="4" fill="white" opacity="0.9"/>
+</svg>

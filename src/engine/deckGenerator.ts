@@ -114,28 +114,128 @@ export function newGroupId(): string {
 }
 
 /**
- * Returns an {x, y} canvas position not already occupied by an existing group.
- * Scans a 3-column grid (180×95px cells, origin at 20,20) and returns the first free slot.
+ * Returns an {x, y} canvas position where a new group of `newTileCount` tiles
+ * will not overlap any existing group's bounding box (including a MARGIN gap).
+ *
+ * Uses real bounding-box collision: each group's width is `tiles.length * TILE_W + PADDING`.
  */
-export function findFreePosition(groups: TileGroup[]): { x: number; y: number } {
-  const COLS    = 3
-  const CELL_W  = 180
-  const CELL_H  = 95
+export function findFreePosition(groups: TileGroup[], newTileCount = 3): { x: number; y: number } {
+  const TILE_W   = 54   // px per tile slot
+  const PADDING  = 24   // ~8px padding each side + border
+  const GROUP_H  = 90
+  const MARGIN   = 8    // minimum gap between group borders
   const ORIGIN_X = 20
   const ORIGIN_Y = 20
+  const CANVAS_W = 920  // conservative canvas width
+
+  const newW = newTileCount * TILE_W + PADDING
+
+  const boxes = groups.map(g => ({
+    x: g.position.x,
+    y: g.position.y,
+    w: g.tiles.length * TILE_W + PADDING,
+    h: GROUP_H,
+  }))
+
+  function overlaps(x: number, y: number): boolean {
+    return boxes.some(b =>
+      x < b.x + b.w + MARGIN &&
+      x + newW + MARGIN > b.x &&
+      y < b.y + b.h + MARGIN &&
+      y + GROUP_H + MARGIN > b.y
+    )
+  }
+
+  const stepX = newW + MARGIN
+  const stepY = GROUP_H + MARGIN
 
   for (let row = 0; row < 20; row++) {
-    for (let col = 0; col < COLS; col++) {
-      const x = ORIGIN_X + col * CELL_W
-      const y = ORIGIN_Y + row * CELL_H
-      const occupied = groups.some(g =>
-        Math.abs(g.position.x - x) < CELL_W / 2 &&
-        Math.abs(g.position.y - y) < CELL_H / 2
-      )
-      if (!occupied) return { x, y }
+    for (let col = 0; ORIGIN_X + col * stepX + newW <= CANVAS_W; col++) {
+      const x = ORIGIN_X + col * stepX
+      const y = ORIGIN_Y + row * stepY
+      if (!overlaps(x, y)) return { x, y }
     }
   }
-  return { x: ORIGIN_X, y: ORIGIN_Y }
+
+  // Fallback: place below all existing groups
+  const maxY = groups.reduce((m, g) => Math.max(m, g.position.y + GROUP_H), 0)
+  return { x: ORIGIN_X, y: maxY + MARGIN }
+}
+
+/**
+ * Repositions all groups to the most center-available non-colliding position.
+ * Groups closer to the canvas center get first pick; others pack outward.
+ */
+export function snapGroupsToCenter(
+  groups: TileGroup[],
+  canvasW: number,
+  canvasH: number,
+): TileGroup[] {
+  if (groups.length === 0 || canvasW === 0 || canvasH === 0) return groups
+
+  const TILE_W  = 54
+  const PADDING = 24
+  const GROUP_H = 90
+  const MARGIN  = 8
+  const STEP    = 8
+  const cx = canvasW / 2
+  const cy = canvasH / 2
+
+  // Groups nearest to canvas center get placed first
+  const sorted = [...groups].sort((a, b) => {
+    const aw = a.tiles.length * TILE_W + PADDING
+    const bw = b.tiles.length * TILE_W + PADDING
+    const da = Math.hypot(a.position.x + aw / 2 - cx, a.position.y + GROUP_H / 2 - cy)
+    const db = Math.hypot(b.position.x + bw / 2 - cx, b.position.y + GROUP_H / 2 - cy)
+    return da - db
+  })
+
+  const placed: Array<{ x: number; y: number; w: number; h: number }> = []
+
+  function overlaps(x: number, y: number, gw: number): boolean {
+    return placed.some(b =>
+      x < b.x + b.w + MARGIN &&
+      x + gw + MARGIN > b.x &&
+      y < b.y + GROUP_H + MARGIN &&
+      y + GROUP_H + MARGIN > b.y
+    )
+  }
+
+  function inBounds(x: number, y: number, gw: number): boolean {
+    return x >= 4 && y >= 4 && x + gw <= canvasW - 4 && y + GROUP_H <= canvasH - 4
+  }
+
+  function findBest(gw: number): { x: number; y: number } {
+    const ix = Math.round((cx - gw / 2) / STEP) * STEP
+    const iy = Math.round((cy - GROUP_H / 2) / STEP) * STEP
+
+    if (inBounds(ix, iy, gw) && !overlaps(ix, iy, gw)) return { x: ix, y: iy }
+
+    const maxR = Math.ceil(Math.max(canvasW, canvasH) / STEP)
+    for (let r = 1; r <= maxR; r++) {
+      const rs = r * STEP
+      for (let d = -r; d <= r; d++) {
+        const candidates: Array<[number, number]> = [
+          [ix + d * STEP, iy - rs],
+          [ix + d * STEP, iy + rs],
+          [ix - rs, iy + d * STEP],
+          [ix + rs, iy + d * STEP],
+        ]
+        for (const [x, y] of candidates) {
+          if (inBounds(x, y, gw) && !overlaps(x, y, gw)) return { x, y }
+        }
+      }
+    }
+
+    return { x: ix, y: iy }
+  }
+
+  return sorted.map(g => {
+    const gw  = g.tiles.length * TILE_W + PADDING
+    const pos = findBest(gw)
+    placed.push({ x: pos.x, y: pos.y, w: gw, h: GROUP_H })
+    return { ...g, position: pos }
+  })
 }
 
 /**

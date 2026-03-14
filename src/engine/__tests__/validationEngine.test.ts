@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { isValidRunClean, isValidSet, isValidGroup, isValidTableState } from '../validationEngine'
+import { isValidRunClean, isValidSet, isValidGroup, isValidTableState, annotateGroups } from '../validationEngine'
 import type { Tile, TileGroup } from '../types'
 
 // ============================================================
@@ -193,5 +193,40 @@ describe('isValidTableState', () => {
       group([num('red', 1), num('blue', 4), num('green', 9)]),
     ]
     expect(isValidTableState(groups)).toBe(false)
+  })
+})
+
+// ============================================================
+// annotateGroups — run sorting with wilds
+// ============================================================
+
+describe('annotateGroups run sorting', () => {
+  it('sorts a wild-free run into ascending slot order', () => {
+    const g = group([num('red', 11), num('red', 9), num('red', 10)])
+    const [annotated] = annotateGroups([g])
+    expect(annotated.type).toBe('run')
+    expect(annotated.tiles.map(t => t.slot)).toEqual([9, 10, 11])
+  })
+
+  it('sorts a run with a wild so the wild fills the gap position', () => {
+    // [9, Wild, 11] + 8 appended → should sort to [8, 9, Wild(gap@10), 11]
+    const g = group([num('red', 9), wild(0), num('red', 11), num('red', 8)])
+    const [annotated] = annotateGroups([g])
+    expect(annotated.type).toBe('run')
+    const slots = annotated.tiles.map(t => t.slot)
+    // Non-wilds in order: 8, 9, 11; gap at 10 → wild goes between 9 and 11
+    expect(slots[0]).toBe(8)
+    expect(slots[1]).toBe(9)
+    expect(annotated.tiles[2].isWild).toBe(true)
+    expect(slots[3]).toBe(11)
+  })
+
+  it('places wild at the start when it extends the run below minimum', () => {
+    // Wild + 9, 10, 11 where wild covers slot 8
+    const g = group([num('red', 9), num('red', 10), num('red', 11), wild(0)])
+    const [annotated] = annotateGroups([g])
+    expect(annotated.type).toBe('run')
+    // No internal gap → wild extends beyond maxSlot (goes last)
+    expect(annotated.tiles[3].isWild).toBe(true)
   })
 })

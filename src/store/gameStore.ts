@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 import type {
   GameState,
   GameConfig,
@@ -7,17 +8,19 @@ import type {
   TileGroup,
   Player,
   PendingEffect,
+  LastFiredEffect,
   ZooCreatureKey,
 } from '@/engine/types'
-import { generateDeck, shuffleDeck, dealInitialHands } from '@/engine/deckGenerator'
+import { generateDeck, shuffleDeck, dealInitialHands, snapGroupsToCenter } from '@/engine/deckGenerator'
 import {
   validateRearrangement,
   cloneGroups,
   cloneTiles,
   addTilesToGroup,
   createGroupFromTiles,
+  splitGroup,
 } from '@/engine/manipulationEngine'
-import { annotateGroups } from '@/engine/validationEngine'
+import { annotateGroups, isValidTableState } from '@/engine/validationEngine'
 import { processRoundEnd, checkGameWin } from '@/engine/scoreEngine'
 
 // ============================================================
@@ -78,6 +81,8 @@ interface GameStore extends GameState {
     calledUno: boolean,
   ) => void
 
+  splitTableGroup: (groupId: string, splitIndex: number) => void
+
   setCpuThinking: (playerIndex: number) => void
   setCpuAnimating: () => void
 
@@ -87,6 +92,12 @@ interface GameStore extends GameState {
   _applyPendingEffect: () => void
   _setPhase:          (phase: GamePhase) => void
   _endRound:          (winnerIndex: number) => void
+
+  /** Update the measured canvas dimensions (called by ResizeObserver in TableCanvas). */
+  setCanvasSize: (w: number, h: number) => void
+
+  /** Clear saved session and return to welcome screen. */
+  resetGame: () => void
 }
 
 // ============================================================
@@ -103,9 +114,11 @@ const initialState: GameState = {
   tilesPlayedThisTurn: [],
   turnDirection:       1,
   pendingEffect:       null,
+  lastFiredEffect:     null,
   roundNumber:         0,
   scoreHistory:        [],
   lastAction:          null,
+  canvasSize:          { w: 920, h: 450 },
 }
 
 // ============================================================
@@ -181,7 +194,7 @@ function resolveSpecialEffect(tiles: Tile[]): PendingEffect | null {
 // Store
 // ============================================================
 
-export const useGameStore = create<GameStore>((set, get) => ({
+export const useGameStore = create<GameStore>()(persist((set, get) => ({
   ...initialState,
 
   // ── Phase helper ────────────────────────────────────────
@@ -204,7 +217,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const deck = shuffleDeck(generateDeck())
     const dealt = dealInitialHands(deck, players.length)
 
-    const updatedPlayers = players.map((p, i) => ({
+    const updatedPlayersWithRack = players.map((p, i) => ({
       ...p,
       rack:           cloneTiles(dealt.hands[i]),
       hasCalledUno:   false,
@@ -213,7 +226,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     set({
       phase:               'PLAYER_TURN',
-      players:             updatedPlayers,
+      players:             updatedPlayersWithRack,
       drawPile:            dealt.drawPile,
       tableGroups:         annotateGroups(dealt.tableStarters),
       turnSnapshot:        null,
@@ -245,7 +258,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const { turnSnapshot, players, currentPlayerIndex } = get()
     if (!turnSnapshot) return
 
-    const updatedPlayers = players.map((p, i) =>
+    const updatedPlayersWithRack = players.map((p, i) =>
       i === currentPlayerIndex
         ? { ...p, rack: cloneTiles(turnSnapshot.playerRack) }
         : p
@@ -253,7 +266,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     set({
       tableGroups:         cloneGroups(turnSnapshot.tableGroups),
-      players:             updatedPlayers,
+      players:             updatedPlayersWithRack,
       tilesPlayedThisTurn: [],
     })
   },
@@ -292,13 +305,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
       newGroups = createGroupFromTiles(tableGroups, playedTiles, position)
     }
 
-    const updatedPlayers = players.map((p, i) =>
+    const updatedPlayersWithRack = players.map((p, i) =>
       i === currentPlayerIndex ? { ...p, rack: newRack } : p
     )
 
     set({
       tableGroups:         newGroups,
-      players:             updatedPlayers,
+      players:             updatedPlayersWithRack,
       tilesPlayedThisTurn: [...tilesPlayedThisTurn, ...playedTiles],
     })
 
@@ -332,13 +345,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
         .filter(g => g.tiles.length > 0)
     )
 
-    const updatedPlayers = players.map((p, i) =>
+    const updatedPlayersWithRack = players.map((p, i) =>
       i === currentPlayerIndex ? { ...p, rack: [...p.rack, tile] } : p
     )
 
     set({
       tableGroups:         newGroups,
-      players:             updatedPlayers,
+      players:             updatedPlayersWithRack,
       tilesPlayedThisTurn: tilesPlayedThisTurn.filter(t => t.id !== tileId),
     })
 
@@ -385,18 +398,32 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
 
     // UNO check: if rack now has 1 tile and player hasn't called UNO
-    const updatedPlayers = players.map((p, i) => {
+    const updatedPlayersWithRack = players.map((p, i) => {
       if (i !== currentPlayerIndex) return p
       const unoCallPending = p.rack.length === 1 && !p.hasCalledUno
       return { ...p, unoCallPending }
     })
 
+    const resolvedEffect = effect
+      ? resolveEffectTarget(effect, currentPlayerIndex, updatedPlayersWithRack.length, get().turnDirection)
+      : null
+
+    const actorName  = players[currentPlayerIndex].name
+    const targetName = resolvedEffect ? updatedPlayersWithRack[resolvedEffect.targetPlayerIndex]?.name ?? '' : ''
+
+    const newLastFiredEffect: LastFiredEffect | null = resolvedEffect
+      ? { type: resolvedEffect.type, actorName, targetName }
+      : null
+
+    const { canvasSize } = get()
+    const snappedGroups = snapGroupsToCenter(tableGroups, canvasSize.w, canvasSize.h)
+
     set({
-      players:      updatedPlayers,
-      turnSnapshot: null,
-      pendingEffect: effect
-        ? resolveEffectTarget(effect, currentPlayerIndex, updatedPlayers.length, get().turnDirection)
-        : null,
+      tableGroups:     snappedGroups,
+      players:         updatedPlayersWithRack,
+      turnSnapshot:    null,
+      pendingEffect:   resolvedEffect,
+      lastFiredEffect: newLastFiredEffect,
     })
 
     get()._advanceTurn()
@@ -406,25 +433,22 @@ export const useGameStore = create<GameStore>((set, get) => ({
   // ── Draw tile ────────────────────────────────────────────
 
   drawTile: () => {
-    const {
-      drawPile,
-      players,
-      currentPlayerIndex,
-      tilesPlayedThisTurn,
-    } = get()
+    // Cancel any in-progress board changes before drawing
+    get().cancelTurn()
 
-    if (tilesPlayedThisTurn.length > 0) return // already played tiles
-
+    const { drawPile, players, currentPlayerIndex } = get()
     const tile = drawPile[0]
     if (!tile) return
 
-    const updatedPlayers = players.map((p, i) =>
-      i === currentPlayerIndex ? { ...p, rack: [...p.rack, tile] } : p
+    const updatedPlayersWithRack = players.map((p, i) =>
+      i === currentPlayerIndex
+        ? { ...p, rack: [...p.rack, tile], unoCallPending: false }
+        : p
     )
 
     set({
       drawPile:     drawPile.slice(1),
-      players:      updatedPlayers,
+      players:      updatedPlayersWithRack,
       turnSnapshot: null,
     })
 
@@ -444,6 +468,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
     })
   },
 
+  // ── Split run group ──────────────────────────────────────
+
+  splitTableGroup: (groupId, splitIndex) => {
+    const { tableGroups } = get()
+    const source = tableGroups.find(g => g.id === groupId)
+    if (!source) return
+    const TILE_W = 54
+    const newPos = {
+      x: source.position.x + splitIndex * TILE_W + 12,
+      y: source.position.y + 96,
+    }
+    set({ tableGroups: splitGroup(tableGroups, groupId, splitIndex, newPos) })
+  },
+
   // ── CPU helpers ──────────────────────────────────────────
 
   setCpuThinking: (playerIndex) => {
@@ -461,12 +499,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
       // Draw a tile
       const tile = drawPile[0]
       if (tile) {
-        const updatedPlayers = players.map((p, i) =>
+        const updatedPlayersWithRack = players.map((p, i) =>
           i === playerIndex ? { ...p, rack: [...p.rack, tile] } : p
         )
         set({
           drawPile:     drawPile.slice(1),
-          players:      updatedPlayers,
+          players:      updatedPlayersWithRack,
           turnSnapshot: null,
           phase:        'CPU_ANIMATING',
         })
@@ -486,21 +524,35 @@ export const useGameStore = create<GameStore>((set, get) => ({
       }
     }
 
-    const updatedPlayers = players.map((p, i) => {
+    let finalGroups = newTableState
+      ? annotateGroups(newTableState)
+      : annotateGroups(tableGroups)
+
+    // Validate AI output — if invalid, revert table and have CPU draw instead
+    if (newTableState && !isValidTableState(finalGroups)) {
+      console.warn('[AI] CPU produced invalid table state — reverting; CPU draws instead')
+      finalGroups = annotateGroups(tableGroups)
+      newRack = [...player.rack]  // put tiles back
+      const drawn = drawPile[0]
+      if (drawn) newRack = [...newRack, drawn]
+    }
+
+    // Recompute updatedPlayersWithRack in case newRack was reverted above
+    const updatedPlayersWithRack = players.map((p, i) => {
       if (i !== playerIndex) return p
       const unoCallPending = newRack.length === 1 && !calledUno
       return { ...p, rack: newRack, hasCalledUno: calledUno, unoCallPending }
     })
 
-    const finalGroups = newTableState
-      ? annotateGroups(newTableState)
-      : annotateGroups(tableGroups)
+    const playedTilesForEffect = updatedPlayersWithRack[playerIndex].rack.length < player.rack.length
+      ? playedTiles
+      : []  // tiles were reverted, no special effect
 
-    const effect = resolveSpecialEffect(playedTiles)
+    const effect = resolveSpecialEffect(playedTilesForEffect)
 
     if (newRack.length === 0) {
       set({
-        players:     updatedPlayers,
+        players:     updatedPlayersWithRack,
         tableGroups: finalGroups,
         turnSnapshot: null,
         phase:       'CPU_ANIMATING',
@@ -509,13 +561,21 @@ export const useGameStore = create<GameStore>((set, get) => ({
       return
     }
 
+    const cpuResolvedEffect = effect
+      ? resolveEffectTarget(effect, playerIndex, updatedPlayersWithRack.length, get().turnDirection)
+      : null
+
+    const cpuActorName  = players[playerIndex].name
+    const cpuTargetName = cpuResolvedEffect ? updatedPlayersWithRack[cpuResolvedEffect.targetPlayerIndex]?.name ?? '' : ''
+
     set({
-      players:             updatedPlayers,
+      players:             updatedPlayersWithRack,
       tableGroups:         finalGroups,
       tilesPlayedThisTurn: [...tilesPlayedThisTurn, ...playedTiles],
       turnSnapshot:        null,
-      pendingEffect:       effect
-        ? resolveEffectTarget(effect, playerIndex, updatedPlayers.length, get().turnDirection)
+      pendingEffect:       cpuResolvedEffect,
+      lastFiredEffect:     cpuResolvedEffect
+        ? { type: cpuResolvedEffect.type, actorName: cpuActorName, targetName: cpuTargetName }
         : null,
       phase:               'CPU_ANIMATING',
     })
@@ -556,8 +616,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
 
     set({
-      players:      penaltyPlayers.players,
-      drawPile:     penaltyPlayers.drawPile,
+      players:       penaltyPlayers.players,
+      drawPile:      penaltyPlayers.drawPile,
       turnDirection: newDirection,
     })
 
@@ -590,11 +650,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const target = pendingEffect.targetPlayerIndex
     if (pendingEffect.drawCount > 0) {
       const drawnTiles = drawPile.slice(0, pendingEffect.drawCount)
-      const updatedPlayers = players.map((p, i) =>
+      const updatedPlayersWithRack = players.map((p, i) =>
         i === target ? { ...p, rack: [...p.rack, ...drawnTiles] } : p
       )
       set({
-        players:   updatedPlayers,
+        players:   updatedPlayersWithRack,
         drawPile:  drawPile.slice(pendingEffect.drawCount),
         pendingEffect: null,
       })
@@ -620,7 +680,46 @@ export const useGameStore = create<GameStore>((set, get) => ({
       set({ phase: 'GAME_OVER' })
     }
   },
-} as GameStore))
+
+  setCanvasSize: (w, h) => set({ canvasSize: { w, h } }),
+
+  resetGame: () => {
+    set({ ...initialState })
+    // clearStorage is available after the store is initialised
+    setTimeout(() => useGameStore.persist.clearStorage(), 0)
+  },
+} as GameStore),
+{
+  name: 'uno-rummy-session',
+  partialize: (state: GameStore) => ({
+    phase:               state.phase,
+    players:             state.players,
+    currentPlayerIndex:  state.currentPlayerIndex,
+    drawPile:            state.drawPile,
+    tableGroups:         state.tableGroups,
+    tilesPlayedThisTurn: state.tilesPlayedThisTurn,
+    turnDirection:       state.turnDirection,
+    pendingEffect:       state.pendingEffect,
+    roundNumber:         state.roundNumber,
+    scoreHistory:        state.scoreHistory,
+    lastAction:          state.lastAction,
+    // turnSnapshot and lastFiredEffect are transient — not persisted
+  }),
+  onRehydrateStorage: () => (state: GameStore | undefined) => {
+    if (!state) return
+    // Snap CPU-in-progress phases to a safe player-turn state on reload
+    if (
+      state.phase === 'CPU_THINKING' ||
+      state.phase === 'CPU_ANIMATING' ||
+      state.phase === 'DEALING'
+    ) {
+      state.phase = 'PLAYER_TURN'
+    }
+    state.turnSnapshot    = null
+    state.lastFiredEffect = null
+    state.pendingEffect   = null
+  },
+}))
 
 // ============================================================
 // Helpers (module-level, not in store)

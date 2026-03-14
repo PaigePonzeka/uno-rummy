@@ -139,6 +139,12 @@ export interface TurnSnapshot {
   playerRack: Tile[]
 }
 
+export interface LastFiredEffect {
+  type: PendingEffectType
+  actorName: string
+  targetName: string
+}
+
 export interface GameState {
   phase: GamePhase
   players: Player[]
@@ -149,9 +155,11 @@ export interface GameState {
   tilesPlayedThisTurn: Tile[]
   turnDirection: 1 | -1
   pendingEffect: PendingEffect | null
+  lastFiredEffect: LastFiredEffect | null
   roundNumber: number
   scoreHistory: RoundScore[]
   lastAction: GameAction | null
+  canvasSize: { w: number; h: number }
 }
 
 // ============================================================

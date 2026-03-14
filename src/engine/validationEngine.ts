@@ -135,6 +135,35 @@ export function getInvalidGroups(groups: TileGroup[]): TileGroup[] {
 }
 
 /**
+ * Sorts run tiles into ascending slot order, placing each wild at its gap position.
+ * Wild tiles have slot 0, so a plain sort would put them first — instead we infer
+ * the gap slot from the non-wild tiles and place the wild there.
+ */
+function sortRunTiles(tiles: Tile[]): Tile[] {
+  const nonWilds = tiles.filter(t => !t.isWild).sort((a, b) => a.slot - b.slot)
+  const wilds    = tiles.filter(t => t.isWild)
+  if (wilds.length === 0) return nonWilds
+
+  const usedSlots = new Set(nonWilds.map(t => t.slot))
+  const minSlot   = nonWilds[0]?.slot ?? 1
+  const maxSlot   = nonWilds[nonWilds.length - 1]?.slot ?? 12
+
+  const gaps: number[] = []
+  for (let s = minSlot; s <= maxSlot; s++) {
+    if (!usedSlots.has(s)) gaps.push(s)
+  }
+
+  // Assign each wild to its gap slot; extras extend the run beyond maxSlot
+  const entries: { slot: number; tile: Tile }[] = nonWilds.map(t => ({ slot: t.slot, tile: t }))
+  wilds.forEach((wild, i) => {
+    const gapSlot = gaps[i] !== undefined ? gaps[i] : maxSlot + (i - gaps.length + 1)
+    entries.push({ slot: gapSlot, tile: wild })
+  })
+
+  return entries.sort((a, b) => a.slot - b.slot).map(e => e.tile)
+}
+
+/**
  * Annotates each group with its current type.
  */
 export function annotateGroups(groups: TileGroup[]): TileGroup[] {
@@ -143,10 +172,10 @@ export function annotateGroups(groups: TileGroup[]): TileGroup[] {
       return { ...g, type: 'incomplete' as const }
     }
     const result = isValidGroup(g.tiles)
-    if (result.valid && result.type === 'run' && g.tiles.every(t => !t.isWild)) {
+    if (result.valid && result.type === 'run') {
       return {
         ...g,
-        tiles: [...g.tiles].sort((a, b) => a.slot - b.slot),
+        tiles: sortRunTiles(g.tiles),
         type: 'run' as const,
       }
     }
@@ -219,7 +248,7 @@ export function findValidPlays(rack: Tile[], tableGroups: TileGroup[]): PlayOpti
       const newGroup: TileGroup = {
         id:       newGroupId(),
         tiles:    combo,
-        position: findFreePosition(tableGroups),
+        position: findFreePosition(tableGroups, combo.length),
         type:     'incomplete',
       }
       options.push({

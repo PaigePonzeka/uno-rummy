@@ -1,5 +1,6 @@
 import { useDroppable } from '@dnd-kit/core'
 import { motion } from 'framer-motion'
+import { TileBack } from './Tile'
 
 interface DrawPileProps {
   count: number
@@ -17,20 +18,11 @@ export default function DrawPile({ count, onDraw, disabled }: DrawPileProps) {
         whileHover={disabled ? {} : { scale: 1.05 }}
         whileTap={disabled ? {} : { scale: 0.95 }}
         disabled={disabled}
-        className={`
-          relative w-12 h-16 rounded-lg border-2 border-white/20
-          bg-gradient-to-br from-gray-600 to-gray-800
-          flex items-center justify-center
-          shadow-lg
-          ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:border-white/50'}
-        `}
+        className={`relative ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
         title={disabled ? undefined : 'Draw a tile'}
         aria-label={`Draw pile — ${count} tiles remaining`}
       >
-        {/* Stack effect */}
-        <div className="absolute inset-0 rounded-lg border border-white/10 translate-x-0.5 translate-y-0.5 bg-gray-700" />
-        <div className="absolute inset-0 rounded-lg border border-white/10 translate-x-1 translate-y-1 bg-gray-600" />
-        <span className="relative text-2xl">🂠</span>
+        <TileBack />
       </motion.button>
       <span className="text-white/60 text-xs font-mono">{count}</span>
     </div>
