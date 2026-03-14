@@ -1,0 +1,91 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: Arial, sans-serif;
+  }
+
+  body {
+    @apply text-white antialiased;
+    background-color: #0e0404;
+    background-image:
+      radial-gradient(ellipse at 50% 50%, rgba(160,20,20,0.70) 0%, rgba(100,8,8,0.50) 30%, rgba(40,2,2,0.25) 60%, transparent 80%),
+      radial-gradient(circle, rgba(255,255,255,0.04) 1px, transparent 1px);
+    background-size: cover, 28px 28px;
+    background-attachment: fixed;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+  }
+
+  body.dark {
+    background-color: #080202;
+    background-image:
+      radial-gradient(ellipse at 50% 50%, rgba(120,15,15,0.65) 0%, rgba(70,5,5,0.45) 30%, rgba(30,2,2,0.22) 60%, transparent 80%),
+      radial-gradient(circle, rgba(255,255,255,0.03) 1px, transparent 1px);
+    background-size: cover, 28px 28px;
+    background-attachment: fixed;
+  }
+}
+
+@layer components {
+  .tile {
+    @apply relative flex items-center justify-center
+           rounded-md border-2 border-white/30
+           font-black select-none cursor-default
+           shadow-md;
+    width: 48px;
+    height: 64px;
+    font-size: 1.1rem;
+  }
+
+  .tile-back {
+    @apply relative flex items-center justify-center
+           rounded-md border-2 border-white/20
+           bg-gray-700 select-none;
+    width: 48px;
+    height: 64px;
+  }
+
+  .tile-sm {
+    width: 40px;
+    height: 54px;
+    font-size: 0.9rem;
+  }
+
+  .tile-selected {
+    @apply ring-4 ring-white ring-offset-1 ring-offset-transparent -translate-y-2;
+  }
+
+  .tile-dragging {
+    @apply opacity-50;
+  }
+
+  .group-container {
+    @apply flex flex-row gap-1 p-2 rounded-lg border-2
+           bg-black/20 backdrop-blur-sm;
+  }
+
+  .felt-table {
+    background: transparent;
+  }
+
+  .dark .felt-table {
+    background: transparent;
+  }
+}
+
+/* Scrollbar styling for racks */
+.rack-scroll::-webkit-scrollbar {
+  height: 4px;
+}
+.rack-scroll::-webkit-scrollbar-track {
+  background: rgba(0,0,0,0.2);
+  border-radius: 2px;
+}
+.rack-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.3);
+  border-radius: 2px;
+}

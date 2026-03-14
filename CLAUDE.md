@@ -154,6 +154,16 @@ Slot 6  → Number 6       Slot 12 → Number 12
 
 ---
 
+## Auto-Placement Scope (Do Not Expand Without User Approval)
+
+Auto-placement of rack tiles onto the board is **intentionally limited to complete valid SETs only** (3–4 tiles of the same number, different colors). Single tiles and RUNs must always be placed manually by the player — this preserves the skill element of deciding where a tile fits in a run.
+
+**Any future code change that automates tile placement beyond complete sets (e.g. auto-playing runs, auto-inserting single tiles into existing groups) MUST be flagged to the user before implementing.**
+
+The relevant code is the `useEffect` in `src/components/game/GameBoard.tsx` that watches `selectedIds`.
+
+---
+
 ## Common Pitfalls
 
 - **Do not remove tiles from the table** — once placed, tiles never return to a rack. Only the player who placed them can pick them up during `cancelTurn()` via snapshot rollback.
