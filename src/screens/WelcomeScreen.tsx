@@ -24,6 +24,7 @@ function TileLogo() {
 export default function WelcomeScreen() {
   const [name, setName] = useState('')
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [instructionsOpen, setInstructionsOpen] = useState(false)
 
   const initializeGame = useGameStore(s => s.initializeGame)
   const scoreHistory   = useSettingsStore(s => s.scoreHistory)
@@ -110,12 +111,21 @@ export default function WelcomeScreen() {
           Let's Play →
         </Button>
 
-        <button
-          onClick={() => setHistoryOpen(true)}
-          className="text-white/35 text-sm hover:text-white/65 transition-colors"
-        >
-          Score History ({scoreHistory.length} {scoreHistory.length === 1 ? 'game' : 'games'})
-        </button>
+        <div className="flex gap-4">
+          <button
+            onClick={() => setInstructionsOpen(true)}
+            className="text-white/35 text-sm hover:text-white/65 transition-colors"
+          >
+            How to Play
+          </button>
+          <span className="text-white/20 select-none">·</span>
+          <button
+            onClick={() => setHistoryOpen(true)}
+            className="text-white/35 text-sm hover:text-white/65 transition-colors"
+          >
+            Score History ({scoreHistory.length} {scoreHistory.length === 1 ? 'game' : 'games'})
+          </button>
+        </div>
       </motion.div>
 
       {/* Zoo parade */}
@@ -136,6 +146,76 @@ export default function WelcomeScreen() {
           </motion.span>
         ))}
       </motion.div>
+
+      {/* Instructions Modal */}
+      <Modal
+        open={instructionsOpen}
+        onClose={() => setInstructionsOpen(false)}
+        title="How to Play"
+        maxWidth="max-w-lg"
+      >
+        <div className="space-y-4 text-sm text-white/80">
+          <section>
+            <h3 className="text-white font-bold text-xs uppercase tracking-widest mb-2 text-white/50">The Deck</h3>
+            <p>100 tiles: numbers 1–12 in 4 colors (red, blue, green, yellow) × 2 copies each, plus 4 Wild tiles. Tiles 2, 5, and 7 are special — <span className="text-white/60">Draw 2</span>, <span className="text-white/60">Skip</span>, and <span className="text-white/60">Reverse</span>.</p>
+          </section>
+
+          <section>
+            <h3 className="text-white font-bold text-xs uppercase tracking-widest mb-2 text-white/50">Your Turn</h3>
+            <ul className="space-y-1">
+              <li>▸ <strong className="text-white">Play 1–4 tiles</strong> from your rack onto the board</li>
+              <li>▸ <strong className="text-white">Rearrange</strong> any tiles already on the board</li>
+              <li>▸ <strong className="text-white">Draw 1 tile</strong> if you can't or don't want to play — ends your turn automatically</li>
+              <li>▸ The final board must contain only <strong className="text-white">valid groups</strong> to end your turn</li>
+            </ul>
+          </section>
+
+          <section>
+            <h3 className="text-white font-bold text-xs uppercase tracking-widest mb-2 text-white/50">Valid Groups (3+ tiles)</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-white/5 rounded-lg p-3">
+                <div className="text-white font-semibold mb-1">Run</div>
+                <div className="text-white/60">3+ consecutive numbers, same color</div>
+                <div className="text-white/40 text-xs mt-1">e.g. Red 4 · 6 · 8 · 9</div>
+              </div>
+              <div className="bg-white/5 rounded-lg p-3">
+                <div className="text-white font-semibold mb-1">Set</div>
+                <div className="text-white/60">3–4 same number, different colors</div>
+                <div className="text-white/40 text-xs mt-1">e.g. Blue 9 · Red 9 · Green 9</div>
+              </div>
+            </div>
+          </section>
+
+          <section>
+            <h3 className="text-white font-bold text-xs uppercase tracking-widest mb-2 text-white/50">Wild Tile</h3>
+            <p>Acts as any tile in a group. You can <strong className="text-white">swap a Wild</strong> off the board by replacing it with the exact tile it represents — the Wild comes to your rack.</p>
+          </section>
+
+          <section>
+            <h3 className="text-white font-bold text-xs uppercase tracking-widest mb-2 text-white/50">Special Tiles</h3>
+            <div className="grid grid-cols-3 gap-2 text-xs">
+              <div className="bg-white/5 rounded p-2 text-center"><div className="text-lg mb-1">+2</div><div className="text-white/60">Draw 2</div></div>
+              <div className="bg-white/5 rounded p-2 text-center"><div className="text-lg mb-1">⊘</div><div className="text-white/60">Skip</div></div>
+              <div className="bg-white/5 rounded p-2 text-center"><div className="text-lg mb-1">↺</div><div className="text-white/60">Reverse</div></div>
+            </div>
+            <p className="mt-2 text-white/50 text-xs">Effects only trigger when played from your rack. If multiple specials are played, only the strongest takes effect.</p>
+          </section>
+
+          <section>
+            <h3 className="text-white font-bold text-xs uppercase tracking-widest mb-2 text-white/50">Scoring &amp; Winning</h3>
+            <ul className="space-y-1">
+              <li>▸ Empty your rack to win the round</li>
+              <li>▸ Score = sum of all opponents' remaining tiles (numbers at face value, specials = 20, wild = 50)</li>
+              <li>▸ First player to <strong className="text-white">200 points</strong> wins the game</li>
+            </ul>
+          </section>
+
+          <section>
+            <h3 className="text-white font-bold text-xs uppercase tracking-widest mb-2 text-white/50">UNO Rule</h3>
+            <p>When you're down to <strong className="text-white">1 tile</strong>, press <strong className="text-white">UNO!</strong> before ending your turn — or draw 2 penalty tiles.</p>
+          </section>
+        </div>
+      </Modal>
 
       {/* Score History Modal */}
       <Modal

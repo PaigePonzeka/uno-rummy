@@ -29,6 +29,20 @@ class TaraAI extends BaseAI {
       workingGroups = this.rearrangeForMax(rack, tableGroups) ?? tableGroups
     }
 
+    // Tara always grabs a wild if she can — a wild in hand is pure aggression
+    const wildSwaps = this.findWildSwaps(rack, workingGroups)
+    if (wildSwaps.length > 0) {
+      const swap = wildSwaps[0]
+      const rackAfterSwap = rack.filter(t => t.id !== swap.replacement.id).concat(swap.wild)
+      return {
+        action:        'play',
+        tilesToPlay:   [swap.replacement],
+        newTableState: swap.newTableState,
+        wildsReceived: [swap.wild],
+        callUno:       this.shouldCallUno(rackAfterSwap),
+      }
+    }
+
     const plays = this.findAllValidPlays(rack, workingGroups)
       .filter(p => p.tilesToPlay.length <= 4)
 

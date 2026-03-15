@@ -239,6 +239,83 @@ export function snapGroupsToCenter(
 }
 
 /**
+ * Resolves position conflicts for newly created groups only.
+ * Existing groups are never moved. Each new group is nudged to the nearest
+ * collision-free position expanding outward from its current drop position.
+ */
+export function resolveNewGroupCollisions(
+  newGroups: TileGroup[],
+  existingGroups: TileGroup[],
+  canvasW: number,
+  canvasH: number,
+): TileGroup[] {
+  if (newGroups.length === 0 || canvasW === 0 || canvasH === 0) return newGroups
+
+  const TILE_W  = 54
+  const PADDING = 24
+  const GROUP_H = 90
+  const MARGIN  = 8
+  const STEP    = 8
+
+  // Seed with existing group bounding boxes so new groups avoid them
+  const placed: Array<{ x: number; y: number; w: number; h: number }> = existingGroups.map(g => ({
+    x: g.position.x,
+    y: g.position.y,
+    w: g.tiles.length * TILE_W + PADDING,
+    h: GROUP_H,
+  }))
+
+  function overlaps(x: number, y: number, gw: number): boolean {
+    return placed.some(b =>
+      x < b.x + b.w + MARGIN &&
+      x + gw + MARGIN > b.x &&
+      y < b.y + b.h + MARGIN &&
+      y + GROUP_H + MARGIN > b.y
+    )
+  }
+
+  function inBounds(x: number, y: number, gw: number): boolean {
+    return x >= 4 && y >= 4 && x + gw <= canvasW - 4 && y + GROUP_H <= canvasH - 4
+  }
+
+  return newGroups.map(g => {
+    const gw = g.tiles.length * TILE_W + PADDING
+    // Snap origin to grid
+    const ix = Math.round(g.position.x / STEP) * STEP
+    const iy = Math.round(g.position.y / STEP) * STEP
+
+    if (inBounds(ix, iy, gw) && !overlaps(ix, iy, gw)) {
+      placed.push({ x: ix, y: iy, w: gw, h: GROUP_H })
+      return { ...g, position: { x: ix, y: iy } }
+    }
+
+    // Expand outward from the drop position until a free spot is found
+    const maxR = Math.ceil(Math.max(canvasW, canvasH) / STEP)
+    for (let r = 1; r <= maxR; r++) {
+      const rs = r * STEP
+      for (let d = -r; d <= r; d++) {
+        const candidates: Array<[number, number]> = [
+          [ix + d * STEP, iy - rs],
+          [ix + d * STEP, iy + rs],
+          [ix - rs, iy + d * STEP],
+          [ix + rs, iy + d * STEP],
+        ]
+        for (const [x, y] of candidates) {
+          if (inBounds(x, y, gw) && !overlaps(x, y, gw)) {
+            placed.push({ x, y, w: gw, h: GROUP_H })
+            return { ...g, position: { x, y } }
+          }
+        }
+      }
+    }
+
+    // Fallback: keep original position
+    placed.push({ x: ix, y: iy, w: gw, h: GROUP_H })
+    return { ...g, position: { x: ix, y: iy } }
+  })
+}
+
+/**
  * Deals initial hands and table starters from a shuffled deck.
  *
  * @param deck     Shuffled 100-tile deck

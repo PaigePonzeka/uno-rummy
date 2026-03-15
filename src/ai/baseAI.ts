@@ -8,6 +8,14 @@ import type {
   PlayOption,
 } from '@/engine/types'
 import { findValidPlays } from '@/engine/validationEngine'
+import { canReplaceWild, swapWildInGroup } from '@/engine/manipulationEngine'
+
+export interface WildSwapOption {
+  wild:         Tile
+  replacement:  Tile
+  groupId:      string
+  newTableState: TileGroup[]
+}
 
 // ============================================================
 // Abstract base class
@@ -54,6 +62,27 @@ export abstract class BaseAI {
       cur.p.rack.length < best.p.rack.length ? cur : best
     )
     return closest.i
+  }
+
+  /** Find all legal wild swaps available given the current rack and table. */
+  protected findWildSwaps(rack: Tile[], tableGroups: TileGroup[]): WildSwapOption[] {
+    const results: WildSwapOption[] = []
+    for (const group of tableGroups) {
+      for (const tile of group.tiles) {
+        if (!tile.isWild) continue
+        for (const rackTile of rack) {
+          if (canReplaceWild(rackTile, tile.id, group)) {
+            results.push({
+              wild:          tile,
+              replacement:   rackTile,
+              groupId:       group.id,
+              newTableState: swapWildInGroup(tableGroups, group.id, tile.id, rackTile),
+            })
+          }
+        }
+      }
+    }
+    return results
   }
 
   /** Randomly pick from an array. */

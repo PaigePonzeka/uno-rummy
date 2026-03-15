@@ -223,10 +223,11 @@ export function validateRearrangement(
   beforeGroups: TileGroup[],
   afterGroups: TileGroup[],
   addedTiles: Tile[],
+  removedWildIds: Set<string> = new Set(),
 ): RearrangementResult {
-  // Collect expected tile IDs
+  // Collect expected tile IDs — exclude wilds that were legally swapped off the table
   const expectedIds = new Set<string>([
-    ...beforeGroups.flatMap(g => g.tiles.map(t => t.id)),
+    ...beforeGroups.flatMap(g => g.tiles.filter(t => !removedWildIds.has(t.id)).map(t => t.id)),
     ...addedTiles.map(t => t.id),
   ])
 
@@ -305,4 +306,62 @@ export function inferWildColor(
   if (neighbor && !neighbor.isWild) return neighbor.color ?? null
 
   return nonWilds[0].color ?? null
+}
+
+/**
+ * Returns true if `rackTile` can legally replace the wild `wildId` in `group`.
+ * For runs: rackTile must match the run's color and the slot the wild fills.
+ * For sets: rackTile must match the set's slot and supply a missing color.
+ */
+export function canReplaceWild(
+  rackTile: Tile,
+  wildId: string,
+  group: TileGroup,
+): boolean {
+  if (rackTile.isWild) return false
+  const nonWilds = group.tiles.filter(t => !t.isWild)
+  if (nonWilds.length === 0) return false
+
+  const isSet = new Set(nonWilds.map(t => t.slot)).size === 1
+
+  if (isSet) {
+    const setSlot    = nonWilds[0].slot
+    const usedColors = new Set(nonWilds.map(t => t.color))
+    return rackTile.slot === setSlot && !usedColors.has(rackTile.color)
+  }
+
+  // Run: determine which slot the wild is filling
+  const sortedNonWilds = nonWilds.slice().sort((a, b) => a.slot - b.slot)
+  const minSlot   = sortedNonWilds[0].slot
+  const maxSlot   = sortedNonWilds[sortedNonWilds.length - 1].slot
+  const usedSlots = new Set(sortedNonWilds.map(t => t.slot))
+  const gaps: number[] = []
+  for (let s = minSlot; s <= maxSlot; s++) {
+    if (!usedSlots.has(s)) gaps.push(s)
+  }
+  const wilds = group.tiles.filter(t => t.isWild)
+  const thisWildIndex = wilds.findIndex(t => t.id === wildId)
+  if (thisWildIndex === -1) return false
+  const requiredSlot = gaps[thisWildIndex] !== undefined
+    ? gaps[thisWildIndex]
+    : maxSlot + (thisWildIndex - gaps.length + 1)
+
+  const runColor = sortedNonWilds[0].color
+  return rackTile.slot === requiredSlot && rackTile.color === runColor
+}
+
+/**
+ * Replaces a wild tile in a group with `replacementTile`.
+ * The group is re-annotated (type updated) after the swap.
+ */
+export function swapWildInGroup(
+  groups: TileGroup[],
+  groupId: string,
+  wildId: string,
+  replacementTile: Tile,
+): TileGroup[] {
+  return annotateGroups(groups.map(g => {
+    if (g.id !== groupId) return g
+    return { ...g, tiles: g.tiles.map(t => t.id === wildId ? replacementTile : t) }
+  }))
 }

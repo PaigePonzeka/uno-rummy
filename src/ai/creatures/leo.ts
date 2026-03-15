@@ -28,6 +28,25 @@ class LeoAI extends BaseAI {
     const rearranged = this.bestRearrangement(rack, tableGroups)
     const workingGroups = rearranged ?? tableGroups
 
+    // Consider wild swaps — Leo swaps if it strictly increases play options
+    const wildSwaps = this.findWildSwaps(rack, workingGroups)
+    for (const swap of wildSwaps) {
+      const rackAfterSwap = rack.filter(t => t.id !== swap.replacement.id).concat(swap.wild)
+      const playsAfterSwap = this.findAllValidPlays(rackAfterSwap, swap.newTableState)
+        .filter(p => p.tilesToPlay.length <= this.personality.combosPerTurn)
+      const playsNow = this.findAllValidPlays(rack, workingGroups)
+        .filter(p => p.tilesToPlay.length <= this.personality.combosPerTurn)
+      if (playsAfterSwap.length > playsNow.length) {
+        return {
+          action:        'play',
+          tilesToPlay:   [swap.replacement],
+          newTableState: swap.newTableState,
+          wildsReceived: [swap.wild],
+          callUno:       this.shouldCallUno(rackAfterSwap),
+        }
+      }
+    }
+
     const plays = this.findAllValidPlays(rack, workingGroups)
       .filter(p => p.tilesToPlay.length <= this.personality.combosPerTurn)
 

@@ -8,6 +8,7 @@ import { useGameStore } from '@/store/gameStore'
 interface TableCanvasProps {
   groups: TileGroup[]
   selectedTileIds: Set<string>
+  swappableWildIds?: Set<string>
   onTileClick: (tileId: string) => void
   onSplit?: (groupId: string, splitIndex: number) => void
   shakeGroupIds?: Set<string>
@@ -19,6 +20,7 @@ interface TableCanvasProps {
 export default function TableCanvas({
   groups,
   selectedTileIds,
+  swappableWildIds,
   onTileClick,
   onSplit,
   shakeGroupIds = new Set(),
@@ -63,6 +65,7 @@ export default function TableCanvas({
             key={group.id}
             group={group}
             selectedTileIds={selectedTileIds}
+            swappableWildIds={swappableWildIds}
             onTileClick={readOnly ? undefined : onTileClick}
             onSplit={readOnly ? undefined : onSplit}
             shake={shakeGroupIds.has(group.id)}

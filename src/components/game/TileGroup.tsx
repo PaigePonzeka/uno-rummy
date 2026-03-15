@@ -7,6 +7,7 @@ import { GROUP_BORDER } from '@/styles/colors'
 interface TileGroupProps {
   group: TileGroupData
   selectedTileIds?: Set<string>
+  swappableWildIds?: Set<string>
   onTileClick?: (tileId: string) => void
   onSplit?: (groupId: string, splitIndex: number) => void
   shake?: boolean
@@ -82,6 +83,7 @@ function DraggableTableTile({ tile, groupId, children }: DraggableTableTileProps
 export default function TileGroupComponent({
   group,
   selectedTileIds = new Set(),
+  swappableWildIds,
   onTileClick,
   onSplit,
   shake = false,
@@ -163,6 +165,7 @@ export default function TileGroupComponent({
                     tile={tile}
                     noLayoutId
                     selected={selectedTileIds.has(tile.id)}
+                    swappable={swappableWildIds?.has(tile.id)}
                     onClick={onTileClick ? () => onTileClick(tile.id) : undefined}
                   />
                 </DraggableTableTile>
@@ -171,6 +174,7 @@ export default function TileGroupComponent({
                   tile={tile}
                   noLayoutId
                   selected={selectedTileIds.has(tile.id)}
+                  swappable={swappableWildIds?.has(tile.id)}
                   onClick={onTileClick ? () => onTileClick(tile.id) : undefined}
                 />
               )}

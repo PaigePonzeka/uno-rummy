@@ -153,6 +153,7 @@ export interface GameState {
   tableGroups: TileGroup[]
   turnSnapshot: TurnSnapshot | null
   tilesPlayedThisTurn: Tile[]
+  swappedWildsThisTurn: Tile[]
   turnDirection: 1 | -1
   pendingEffect: PendingEffect | null
   lastFiredEffect: LastFiredEffect | null
@@ -220,4 +221,6 @@ export interface AITurn {
   tilesToPlay?: Tile[]
   newTableState?: TileGroup[]
   callUno?: boolean
+  /** Wilds received from the board via swap (added to rack, not counted as "played"). */
+  wildsReceived?: Tile[]
 }

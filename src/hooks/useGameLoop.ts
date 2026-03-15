@@ -30,25 +30,37 @@ export function useCpuTurns() {
 
     const ai = getAI(player.creatureKey as ZooCreatureKey)
 
+    let settled = false
+
+    function applyTurn(turn: { tilesToPlay?: { id: string }[]; newTableState?: unknown; callUno?: boolean; wildsReceived?: unknown[] }) {
+      if (settled) return
+      settled = true
+      clearTimeout(timeoutId)
+      setCpuAnimating()
+      setTimeout(() => {
+        applyCpuTurn(
+          currentPlayerIndex,
+          turn.tilesToPlay?.map(t => t.id) ?? [],
+          (turn.newTableState as Parameters<typeof applyCpuTurn>[2]) ?? null,
+          turn.callUno ?? false,
+          (turn.wildsReceived as Parameters<typeof applyCpuTurn>[4]) ?? [],
+        )
+        runningRef.current = false
+      }, 400)
+    }
+
+    // Fallback: if AI hasn't resolved within 5 seconds, force a draw
+    const timeoutId = setTimeout(() => {
+      console.warn(`[AI] ${player.name} timed out — forcing draw`)
+      applyTurn({ action: 'draw' } as never)
+    }, 5000)
+
     // Run AI turn asynchronously
     ai.decideTurn(
       player.rack,
       tableGroups,
       useGameStore.getState(),
       currentPlayerIndex,
-    ).then(turn => {
-      setCpuAnimating()
-
-      // Small delay for animation
-      setTimeout(() => {
-        applyCpuTurn(
-          currentPlayerIndex,
-          turn.tilesToPlay?.map(t => t.id) ?? [],
-          turn.newTableState ?? null,
-          turn.callUno ?? false,
-        )
-        runningRef.current = false
-      }, 400)
-    })
+    ).then(applyTurn)
   }, [phase, currentPlayerIndex])
 }

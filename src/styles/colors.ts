@@ -31,8 +31,8 @@ export const SELECTED_COLOR = '#9333EA'
 
 // Group validity border colors
 export const GROUP_BORDER = {
-  run:        'border-emerald-400',
-  set:        'border-sky-400',
-  incomplete: 'border-gray-400',
+  run:        'border-white/40',
+  set:        'border-white/40',
+  incomplete: 'border-white/20',
   invalid:    'border-red-500',
 } as const

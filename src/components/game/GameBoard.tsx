@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import {
   DndContext,
   DragOverlay,
@@ -13,8 +13,8 @@ import { arrayMove } from '@dnd-kit/sortable'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useGameStore } from '@/store/gameStore'
 import type { LastFiredEffect, Player } from '@/engine/types'
-import { moveTileBetweenGroups, createGroupFromTiles, moveGroup } from '@/engine/manipulationEngine'
-import { isValidSet } from '@/engine/validationEngine'
+import { moveTileBetweenGroups, createGroupFromTiles, moveGroup, canReplaceWild } from '@/engine/manipulationEngine'
+import { isValidSet, findValidPlays } from '@/engine/validationEngine'
 import { findFreePosition } from '@/engine/deckGenerator'
 import TableCanvas from './TableCanvas'
 import PlayerArea from './PlayerArea'
@@ -45,6 +45,7 @@ export default function GameBoard() {
   const resetGame         = useGameStore(s => s.resetGame)
   const returnTileToRack  = useGameStore(s => s.returnTileToRack)
   const splitTableGroup   = useGameStore(s => s.splitTableGroup)
+  const swapWild          = useGameStore(s => s.swapWild)
 
   const humanPlayer = players[0]
 
@@ -123,8 +124,32 @@ export default function GameBoard() {
     if (!isValidSet(selectedTiles)) return
     const pos = findFreePosition(tableGroups, selectedTiles.length)
     const result = playTilesFromRack([...selectedIds], null, 0, pos)
-    if (result?.success !== false) setSelectedIds(new Set())
+    if (result?.success !== false) {
+      play('tilePlay')
+      setSelectedIds(new Set())
+    }
   }, [selectedIds]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Round end sounds ──────────────────────────────────────
+  useEffect(() => {
+    if (phase !== 'ROUND_END') return
+    const humanWon = players[0] && [...players].sort((a, b) => b.score - a.score)[0]?.id === players[0].id
+    play(humanWon ? 'roundWin' : 'roundLose')
+  }, [phase]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Keyboard shortcuts ────────────────────────────────────
+  const canCommit = tilesPlayedThisTurn.length > 0
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (phase !== 'PLAYER_TURN' || e.repeat) return
+      if (e.code === 'Space' && canCommit) { e.preventDefault(); handleCommit() }
+      if (e.code === 'Escape') cancelTurn()
+      if ((e.key === 'd' || e.key === 'D') && tilesPlayedThisTurn.length === 0) handleDraw()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [phase, tilesPlayedThisTurn.length, canCommit]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Tile selection ───────────────────────────────────────
   const handleToggleSelect = useCallback((id: string, multi: boolean) => {
@@ -132,17 +157,48 @@ export default function GameBoard() {
       const next = new Set(prev)
       if (multi) {
         if (next.has(id)) next.delete(id)
-        else next.add(id)
+        else { next.add(id); play('tileClick') }
       } else {
         if (next.has(id) && next.size === 1) next.clear()
-        else { next.clear(); next.add(id) }
+        else { next.clear(); next.add(id); play('tileClick') }
       }
       return next
     })
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Draw handler (shows banner) ──────────────────────────
+  // ── Swappable wild IDs ───────────────────────────────────
+  const swappableWildIds = useMemo(() => {
+    if (phase !== 'PLAYER_TURN' || selectedIds.size !== 1) return new Set<string>()
+    const rackTileId = [...selectedIds][0]
+    const rackTile = (humanPlayer?.rack ?? []).find(t => t.id === rackTileId)
+    if (!rackTile) return new Set<string>()
+    const result = new Set<string>()
+    for (const group of tableGroups) {
+      for (const tile of group.tiles) {
+        if (tile.isWild && canReplaceWild(rackTile, tile.id, group)) result.add(tile.id)
+      }
+    }
+    return result
+  }, [phase, selectedIds, humanPlayer?.rack, tableGroups])
+
+  // ── Table tile click: swap wild or toggle select ─────────
+  function handleTableTileClick(tileId: string) {
+    if (swappableWildIds.has(tileId) && selectedIds.size === 1) {
+      const rackTileId = [...selectedIds][0]
+      const group = tableGroups.find(g => g.tiles.some(t => t.id === tileId))
+      if (group) {
+        const result = swapWild(group.id, tileId, rackTileId)
+        if (result.success) setSelectedIds(new Set())
+        else addToast(result.message ?? 'Cannot swap', 'error')
+      }
+    } else {
+      handleToggleSelect(tileId, false)
+    }
+  }
+
+  // ── Draw handler (shows banner + sound) ─────────────────
   function handleDraw() {
+    play('tileDraw')
     showBanner('You drew a tile')
     drawTile()
   }
@@ -271,6 +327,7 @@ export default function GameBoard() {
   function handleCommit() {
     const result = commitTurn()
     if (!result.success) {
+      play('error')
       addToast(result.message ?? 'Invalid table state', 'error')
       const ids = new Set(tableGroups.filter(g => g.type === 'invalid' || g.tiles.length < 3).map(g => g.id))
       if (ids.size > 0) {
@@ -278,6 +335,16 @@ export default function GameBoard() {
         setTimeout(() => setShakeGroupIds(new Set()), 600)
       }
     }
+  }
+
+  // ── Hint ─────────────────────────────────────────────────
+  function handleHint() {
+    const plays = findValidPlays(humanPlayer?.rack ?? [], tableGroups)
+    if (plays.length === 0) {
+      addToast('No valid plays found — try drawing', 'info')
+      return
+    }
+    setSelectedIds(new Set(plays[0].tilesToPlay.map(t => t.id)))
   }
 
   const cpuPlayers = players.slice(1)
@@ -336,7 +403,8 @@ export default function GameBoard() {
             <TableCanvas
               groups={tableGroups}
               selectedTileIds={selectedIds}
-              onTileClick={(id) => handleToggleSelect(id, false)}
+              swappableWildIds={swappableWildIds}
+              onTileClick={handleTableTileClick}
               onSplit={splitTableGroup}
               shakeGroupIds={shakeGroupIds}
               insertIndicator={insertIndicator}
@@ -373,6 +441,7 @@ export default function GameBoard() {
               onCallUno={handleCallUno}
               onCancel={cancelTurn}
               onGiveUp={() => { if (window.confirm('Give up and return to the start screen?')) resetGame() }}
+              onHint={handleHint}
               selectedIds={selectedIds}
               onToggleSelect={handleToggleSelect}
             />
@@ -449,11 +518,45 @@ function CenterBanner({ message, onDone }: { message: string; onDone: () => void
   )
 }
 
+// ── Confetti burst ───────────────────────────────────────────
+
+function Confetti() {
+  const COLORS = ['#D72600', '#0956BF', '#379711', '#ECD407', '#9333EA', '#fff']
+  const particles = Array.from({ length: 48 }, (_, i) => ({
+    id: i,
+    color: COLORS[i % COLORS.length],
+    x: (Math.random() - 0.5) * 700,
+    y: -(180 + Math.random() * 340),
+    rotate: Math.random() * 720 * (Math.random() > 0.5 ? 1 : -1),
+    delay: Math.random() * 0.35,
+    size: 6 + Math.random() * 6,
+  }))
+  return (
+    <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 50 }}>
+      {particles.map(p => (
+        <motion.div
+          key={p.id}
+          initial={{ x: 0, y: 0, opacity: 1, rotate: 0 }}
+          animate={{ x: p.x, y: p.y, opacity: 0, rotate: p.rotate }}
+          transition={{ duration: 1.4, delay: p.delay, ease: 'easeOut' }}
+          style={{
+            position: 'absolute', top: '50%', left: '50%',
+            width: p.size, height: p.size, borderRadius: 2,
+            background: p.color,
+          }}
+        />
+      ))}
+    </div>
+  )
+}
+
 // ── Round end overlay ────────────────────────────────────────
 
 function RoundEndOverlay({ players }: { players: Player[] }) {
   const startRound = useGameStore(s => s.startRound)
-  const winner = [...players].sort((a, b) => b.score - a.score)[0]
+  const sorted     = [...players].sort((a, b) => b.score - a.score)
+  const winner     = sorted[0]
+  const humanWon   = winner?.id === players[0]?.id
 
   return (
     <motion.div
@@ -462,19 +565,21 @@ function RoundEndOverlay({ players }: { players: Player[] }) {
       exit={{ opacity: 0 }}
       className="absolute inset-0 bg-black/70 flex items-center justify-center z-30"
     >
+      {humanWon && <Confetti />}
       <motion.div
         initial={{ scale: 0.8, y: 20 }}
         animate={{ scale: 1, y: 0 }}
         className="bg-gray-900 rounded-2xl p-8 text-center border border-white/10 shadow-2xl max-w-sm w-full mx-4"
+        style={{ position: 'relative', zIndex: 51 }}
       >
-        <div className="text-5xl mb-3">🎉</div>
+        <div className="text-5xl mb-3">{humanWon ? '🏆' : '🎉'}</div>
         <h2 className="text-2xl font-black text-white mb-2">Round Over!</h2>
         <p className="text-white/70 mb-4">
           Leader: <strong>{winner?.name}</strong> with {winner?.score} pts
         </p>
 
         <div className="space-y-2 mb-6">
-          {[...players].sort((a, b) => b.score - a.score).map(p => (
+          {sorted.map(p => (
             <div key={p.id} className="flex justify-between text-sm text-white/80">
               <span>{p.name}</span>
               <span className="font-bold tabular-nums">{p.score} pts</span>

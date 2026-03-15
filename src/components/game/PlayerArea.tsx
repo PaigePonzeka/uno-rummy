@@ -17,6 +17,7 @@ interface PlayerAreaProps {
   onCallUno: () => void
   onCancel: () => void
   onGiveUp: () => void
+  onHint?: () => void
   selectedIds: Set<string>
   onToggleSelect: (id: string, multi: boolean) => void
 }
@@ -34,6 +35,7 @@ export default function PlayerArea({
   onCallUno,
   onCancel,
   onGiveUp,
+  onHint,
   selectedIds,
   onToggleSelect,
 }: PlayerAreaProps) {
@@ -95,6 +97,7 @@ export default function PlayerArea({
               size="sm"
               onClick={onCommit}
               disabled={!canCommit}
+              title="End Turn (Space)"
               data-testid="end-turn-btn"
             >
               ✓ End Turn
@@ -105,15 +108,28 @@ export default function PlayerArea({
               size="sm"
               onClick={onDraw}
               disabled={tilesPlayedCount > 0}
+              title="Draw Tile (D)"
               data-testid="draw-tile-btn"
             >
               Draw Tile
             </Button>
 
+            {onHint && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onHint}
+                title="Suggest best play"
+              >
+                💡 Hint
+              </Button>
+            )}
+
             <Button
               variant="ghost"
               size="sm"
               onClick={onCancel}
+              title="Reset Board (Esc)"
               data-testid="cancel-btn"
             >
               ↺ Reset Board

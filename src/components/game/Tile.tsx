@@ -10,6 +10,7 @@ interface TileProps {
   small?: boolean
   dragPreview?: boolean
   noLayoutId?: boolean
+  swappable?: boolean
   onClick?: () => void
   style?: React.CSSProperties
 }
@@ -70,6 +71,7 @@ export default function Tile({
   small = false,
   dragPreview = false,
   noLayoutId = false,
+  swappable = false,
   onClick,
   style,
 }: TileProps) {
@@ -95,6 +97,8 @@ export default function Tile({
     <motion.div
       layout={!dragPreview && !noLayoutId}
       layoutId={dragPreview || noLayoutId ? undefined : tile.id}
+      animate={swappable ? { scale: [1, 1.05, 1] } : {}}
+      transition={swappable ? { duration: 1, repeat: Infinity } : {}}
       onClick={disabled ? undefined : onClick}
       style={{
         background:   tile.isWild ? '#1a1a1a' : '#FFF8E7',
@@ -102,11 +106,13 @@ export default function Tile({
         height:       h,
         borderRadius: 7,
         border:    `2px solid ${tileColor}`,
-        boxShadow: selected
-          ? `inset 0 1px 0 rgba(255,255,255,0.15), 0 0 0 2px ${SELECTED_COLOR}, 0 0 10px rgba(147,51,234,0.45), 0 4px 0 rgba(0,0,0,0.2), 0 10px 20px rgba(0,0,0,0.5)`
-          : tile.isWild
-            ? 'inset 0 1px 0 rgba(255,255,255,0.08), 0 2px 0 rgba(0,0,0,0.3), 0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.5)'
-            : 'inset 0 1px 0 rgba(255,255,255,0.5), 0 2px 0 rgba(0,0,0,0.2), 0 4px 0 rgba(0,0,0,0.12), 0 6px 10px rgba(0,0,0,0.35)',
+        boxShadow: swappable
+          ? 'inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 2px #F59E0B, 0 0 12px rgba(245,158,11,0.6), 0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.5)'
+          : selected
+            ? `inset 0 1px 0 rgba(255,255,255,0.15), 0 0 0 2px ${SELECTED_COLOR}, 0 0 10px rgba(147,51,234,0.45), 0 4px 0 rgba(0,0,0,0.2), 0 10px 20px rgba(0,0,0,0.5)`
+            : tile.isWild
+              ? 'inset 0 1px 0 rgba(255,255,255,0.08), 0 2px 0 rgba(0,0,0,0.3), 0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.5)'
+              : 'inset 0 1px 0 rgba(255,255,255,0.5), 0 2px 0 rgba(0,0,0,0.2), 0 4px 0 rgba(0,0,0,0.12), 0 6px 10px rgba(0,0,0,0.35)',
         display:        'flex',
         flexDirection:  'column',
         alignItems:     'center',

@@ -11,7 +11,7 @@ import type {
   LastFiredEffect,
   ZooCreatureKey,
 } from '@/engine/types'
-import { generateDeck, shuffleDeck, dealInitialHands, snapGroupsToCenter } from '@/engine/deckGenerator'
+import { generateDeck, shuffleDeck, dealInitialHands, resolveNewGroupCollisions } from '@/engine/deckGenerator'
 import {
   validateRearrangement,
   cloneGroups,
@@ -19,6 +19,8 @@ import {
   addTilesToGroup,
   createGroupFromTiles,
   splitGroup,
+  canReplaceWild,
+  swapWildInGroup,
 } from '@/engine/manipulationEngine'
 import { annotateGroups, isValidTableState } from '@/engine/validationEngine'
 import { processRoundEnd, checkGameWin } from '@/engine/scoreEngine'
@@ -72,6 +74,9 @@ interface GameStore extends GameState {
   /** Return a tile from the table back to the human rack (only tiles played this turn). */
   returnTileToRack:  (tileId: string, fromGroupId: string) => ActionResult
 
+  /** Swap a wild on the table with the exact tile it represents from the player's rack. */
+  swapWild: (groupId: string, wildId: string, rackTileId: string) => ActionResult
+
   // ── CPU actions ─────────────────────────────────────────
   /** Apply the result of a CPU AI turn. */
   applyCpuTurn: (
@@ -79,6 +84,7 @@ interface GameStore extends GameState {
     tileIds: string[],
     newTableState: TileGroup[] | null,
     calledUno: boolean,
+    wildsReceived?: Tile[],
   ) => void
 
   splitTableGroup: (groupId: string, splitIndex: number) => void
@@ -111,8 +117,9 @@ const initialState: GameState = {
   drawPile:            [],
   tableGroups:         [],
   turnSnapshot:        null,
-  tilesPlayedThisTurn: [],
-  turnDirection:       1,
+  tilesPlayedThisTurn:  [],
+  swappedWildsThisTurn: [],
+  turnDirection:        1,
   pendingEffect:       null,
   lastFiredEffect:     null,
   roundNumber:         0,
@@ -265,9 +272,10 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
     )
 
     set({
-      tableGroups:         cloneGroups(turnSnapshot.tableGroups),
-      players:             updatedPlayersWithRack,
-      tilesPlayedThisTurn: [],
+      tableGroups:          cloneGroups(turnSnapshot.tableGroups),
+      players:              updatedPlayersWithRack,
+      tilesPlayedThisTurn:  [],
+      swappedWildsThisTurn: [],
     })
   },
 
@@ -358,6 +366,39 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
     return { success: true }
   },
 
+  // ── Swap wild ────────────────────────────────────────────
+
+  swapWild: (groupId, wildId, rackTileId) => {
+    const { tableGroups, players, currentPlayerIndex, tilesPlayedThisTurn, swappedWildsThisTurn } = get()
+    const player = players[currentPlayerIndex]
+    if (player.type !== 'human') return { success: false, message: 'Not your turn' }
+
+    const rackTile = player.rack.find(t => t.id === rackTileId)
+    if (!rackTile) return { success: false, message: 'Tile not in rack' }
+
+    const group = tableGroups.find(g => g.id === groupId)
+    if (!group) return { success: false, message: 'Group not found' }
+
+    const wild = group.tiles.find(t => t.id === wildId)
+    if (!wild || !wild.isWild) return { success: false, message: 'Not a wild tile' }
+
+    if (!canReplaceWild(rackTile, wildId, group)) {
+      return { success: false, message: 'That tile cannot replace this wild' }
+    }
+
+    const newGroups = swapWildInGroup(tableGroups, groupId, wildId, rackTile)
+    const newRack = player.rack.filter(t => t.id !== rackTileId).concat(wild)
+
+    set({
+      tableGroups:          newGroups,
+      players:              players.map((p, i) => i === currentPlayerIndex ? { ...p, rack: newRack } : p),
+      tilesPlayedThisTurn:  [...tilesPlayedThisTurn, rackTile],
+      swappedWildsThisTurn: [...swappedWildsThisTurn, wild],
+    })
+
+    return { success: true }
+  },
+
   // ── Commit turn ──────────────────────────────────────────
 
   commitTurn: () => {
@@ -374,10 +415,12 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
       return { success: false, message: 'You must play at least one tile or draw' }
     }
 
+    const { swappedWildsThisTurn } = get()
     const validation = validateRearrangement(
       turnSnapshot.tableGroups,
       tableGroups,
       tilesPlayedThisTurn,
+      new Set(swappedWildsThisTurn.map(t => t.id)),
     )
 
     if (!validation.valid) {
@@ -416,14 +459,22 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
       : null
 
     const { canvasSize } = get()
-    const snappedGroups = snapGroupsToCenter(tableGroups, canvasSize.w, canvasSize.h)
+    const beforeIds = new Set(turnSnapshot.tableGroups.map(g => g.id))
+    const oldGroups = tableGroups.filter(g => beforeIds.has(g.id))
+    const newGroups = tableGroups.filter(g => !beforeIds.has(g.id))
+    const snappedGroups = [
+      ...oldGroups,
+      ...resolveNewGroupCollisions(newGroups, oldGroups, canvasSize.w, canvasSize.h),
+    ]
 
     set({
-      tableGroups:     snappedGroups,
-      players:         updatedPlayersWithRack,
-      turnSnapshot:    null,
-      pendingEffect:   resolvedEffect,
-      lastFiredEffect: newLastFiredEffect,
+      tableGroups:          snappedGroups,
+      players:              updatedPlayersWithRack,
+      turnSnapshot:         null,
+      pendingEffect:        resolvedEffect,
+      lastFiredEffect:      newLastFiredEffect,
+      tilesPlayedThisTurn:  [],
+      swappedWildsThisTurn: [],
     })
 
     get()._advanceTurn()
@@ -491,7 +542,7 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
 
   setCpuAnimating: () => set({ phase: 'CPU_ANIMATING' }),
 
-  applyCpuTurn: (playerIndex, tileIds, newTableState, calledUno) => {
+  applyCpuTurn: (playerIndex, tileIds, newTableState, calledUno, wildsReceived = []) => {
     const { players, drawPile, tableGroups, tilesPlayedThisTurn } = get()
     const player = players[playerIndex]
 
@@ -513,7 +564,7 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
       return
     }
 
-    // Remove tiles from CPU rack
+    // Remove tiles from CPU rack; add any wilds received via swap
     const playedTiles: Tile[] = []
     let newRack = [...player.rack]
     for (const id of tileIds) {
@@ -523,6 +574,7 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
         newRack.splice(idx, 1)
       }
     }
+    if (wildsReceived.length > 0) newRack = [...newRack, ...wildsReceived]
 
     let finalGroups = newTableState
       ? annotateGroups(newTableState)

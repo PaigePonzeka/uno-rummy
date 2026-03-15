@@ -25,8 +25,24 @@ class MarcoAI extends BaseAI {
     // First try standard plays
     let plays = this.limitCombos(this.findAllValidPlays(rack, tableGroups))
 
-    // Marco tries to rearrange to unlock more plays
+    // Marco tries to rearrange to unlock more plays (includes wild swaps)
     if (Math.random() < this.personality.rearrangeProbability) {
+      // 60% chance to try a wild swap as part of rearrangement
+      if (Math.random() < 0.6) {
+        const wildSwaps = this.findWildSwaps(rack, tableGroups)
+        if (wildSwaps.length > 0) {
+          const swap = this.pick(wildSwaps)
+          const rackAfterSwap = rack.filter(t => t.id !== swap.replacement.id).concat(swap.wild)
+          return {
+            action:        'play',
+            tilesToPlay:   [swap.replacement],
+            newTableState: swap.newTableState,
+            wildsReceived: [swap.wild],
+            callUno:       this.shouldCallUno(rackAfterSwap),
+          }
+        }
+      }
+
       const rearrangeResult = this.tryRearrangement(rack, tableGroups)
       if (rearrangeResult) {
         return rearrangeResult
