@@ -129,6 +129,7 @@ export default function PlayerArea({
               variant="ghost"
               size="sm"
               onClick={onCancel}
+              disabled={tilesPlayedCount === 0}
               title="Reset Board (Esc)"
               data-testid="cancel-btn"
             >
