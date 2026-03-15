@@ -174,15 +174,16 @@ See `CLAUDE.md` for full instructions.
 
 ---
 
-## Deployment (Vercel)
+## Deployment (Netlify)
 
-1. Push to GitHub
-2. Import repo in Vercel dashboard
-3. Framework preset: **Vite**
-4. Build command: `npm run build`
-5. Output directory: `dist`
+The site is hosted on Netlify with continuous deployment from the `main` branch.
 
-The included `vercel.json` handles SPA routing.
+```bash
+# Deploy by pushing to main
+git push origin main
+```
+
+Netlify auto-detects Vite and runs `npm run build` — no dashboard configuration needed.
 
 ---
 
