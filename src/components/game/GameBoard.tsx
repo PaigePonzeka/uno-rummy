@@ -12,7 +12,7 @@ import {
 import { arrayMove } from '@dnd-kit/sortable'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useGameStore } from '@/store/gameStore'
-import type { LastFiredEffect, Player } from '@/engine/types'
+import type { LastFiredEffect, Player, TileGroup } from '@/engine/types'
 import { TILE_COLORS, SELECTED_COLOR } from '@/styles/colors'
 import { moveTileBetweenGroups, createGroupFromTiles, moveGroup, canReplaceWild } from '@/engine/manipulationEngine'
 import { isValidSet, findValidPlays } from '@/engine/validationEngine'
@@ -27,6 +27,25 @@ import { useCpuTurns } from '@/hooks/useGameLoop'
 import { useSound } from '@/hooks/useSound'
 import Tile from './Tile'
 
+// ── Board auto-zoom ───────────────────────────────────────────────────────────
+const TILE_W = 54, TILE_GAP = 4, TILE_PAD = 16, GROUP_H = 90, ZOOM_MARGIN = 24
+
+function computeBoardScale(
+  groups: TileGroup[],
+  canvas: { w: number; h: number },
+): number {
+  if (groups.length === 0) return 1
+  let maxRight = 0, maxBottom = 0
+  for (const g of groups) {
+    const gw = g.tiles.length * (TILE_W + TILE_GAP) + TILE_PAD
+    maxRight  = Math.max(maxRight,  g.position.x + gw)
+    maxBottom = Math.max(maxBottom, g.position.y + GROUP_H)
+  }
+  const scaleX = (canvas.w - ZOOM_MARGIN) / maxRight
+  const scaleY = (canvas.h - ZOOM_MARGIN) / maxBottom
+  return Math.max(Math.min(scaleX, scaleY, 1), 0.4)
+}
+
 export default function GameBoard() {
   const phase              = useGameStore(s => s.phase)
   const players            = useGameStore(s => s.players)
@@ -37,6 +56,12 @@ export default function GameBoard() {
   const turnDirection       = useGameStore(s => s.turnDirection)
   const lastFiredEffect     = useGameStore(s => s.lastFiredEffect)
   const unoPenaltyFiredAt   = useGameStore(s => s.unoPenaltyFiredAt)
+  const canvasSize          = useGameStore(s => s.canvasSize)
+
+  const boardScale = useMemo(
+    () => computeBoardScale(tableGroups, canvasSize),
+    [tableGroups, canvasSize],
+  )
 
   const playTilesFromRack = useGameStore(s => s.playTilesFromRack)
   const rearrangeTable    = useGameStore(s => s.rearrangeTable)
@@ -270,14 +295,15 @@ export default function GameBoard() {
       return
     }
 
-    // Compute canvas-relative drop position from the dragged element's translated rect
+    // Compute canvas-relative drop position from the dragged element's translated rect.
+    // Divide by boardScale to convert screen-space pixels → logical canvas-space coordinates.
     let position = { x: 20, y: 20 }
     if (translatedRect && over.rect) {
-      const rawX = translatedRect.left - over.rect.left
-      const rawY = translatedRect.top  - over.rect.top
+      const rawX = (translatedRect.left - over.rect.left) / boardScale
+      const rawY = (translatedRect.top  - over.rect.top)  / boardScale
       position = {
-        x: Math.max(4, Math.min(over.rect.width  - 60,  rawX)),
-        y: Math.max(4, Math.min(over.rect.height - 90,  rawY)),
+        x: Math.max(4, Math.min(over.rect.width  / boardScale - 60,  rawX)),
+        y: Math.max(4, Math.min(over.rect.height / boardScale - 90,  rawY)),
       }
     }
 
@@ -433,6 +459,7 @@ export default function GameBoard() {
               insertIndicator={insertIndicator}
               readOnly={phase !== 'PLAYER_TURN'}
               draggable={phase === 'PLAYER_TURN'}
+              boardScale={boardScale}
             />
           </div>
 

@@ -15,6 +15,7 @@ interface TableCanvasProps {
   insertIndicator?: { groupId: string; index: number } | null
   readOnly?: boolean
   draggable?: boolean
+  boardScale?: number
 }
 
 export default function TableCanvas({
@@ -27,6 +28,7 @@ export default function TableCanvas({
   insertIndicator,
   readOnly = false,
   draggable = false,
+  boardScale = 1,
 }: TableCanvasProps) {
   const { setNodeRef, isOver } = useDroppable({ id: 'table-canvas' })
   const setCanvasSize = useGameStore(s => s.setCanvasSize)
@@ -58,33 +60,42 @@ export default function TableCanvas({
       `}
       style={{ minHeight: 320 }}
     >
-      {/* Tile groups */}
-      <AnimatePresence>
-        {groups.map(group => (
-          <TileGroupComponent
-            key={group.id}
-            group={group}
-            selectedTileIds={selectedTileIds}
-            swappableWildIds={swappableWildIds}
-            onTileClick={readOnly ? undefined : onTileClick}
-            onSplit={readOnly ? undefined : onSplit}
-            shake={shakeGroupIds.has(group.id)}
-            insertIndicatorIndex={
-              insertIndicator?.groupId === group.id ? insertIndicator.index : null
-            }
-            draggable={draggable && !readOnly}
-          />
-        ))}
-      </AnimatePresence>
+      {/* Scaled content wrapper — groups are positioned in logical space; scale maps to screen */}
+      <div style={{
+        transform:       `scale(${boardScale})`,
+        transformOrigin: '0 0',
+        transition:      'transform 0.4s ease',
+        width:           `${100 / boardScale}%`,
+        height:          `${100 / boardScale}%`,
+      }}>
+        {/* Tile groups */}
+        <AnimatePresence>
+          {groups.map(group => (
+            <TileGroupComponent
+              key={group.id}
+              group={group}
+              selectedTileIds={selectedTileIds}
+              swappableWildIds={swappableWildIds}
+              onTileClick={readOnly ? undefined : onTileClick}
+              onSplit={readOnly ? undefined : onSplit}
+              shake={shakeGroupIds.has(group.id)}
+              insertIndicatorIndex={
+                insertIndicator?.groupId === group.id ? insertIndicator.index : null
+              }
+              draggable={draggable && !readOnly}
+            />
+          ))}
+        </AnimatePresence>
 
-      {/* Empty state hint */}
-      {groups.length === 0 && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <p className="text-white/20 text-sm text-center">
-            Drag tiles here to start playing
-          </p>
-        </div>
-      )}
+        {/* Empty state hint */}
+        {groups.length === 0 && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <p className="text-white/20 text-sm text-center">
+              Drag tiles here to start playing
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

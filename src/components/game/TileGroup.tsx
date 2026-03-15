@@ -57,7 +57,7 @@ interface DraggableTableTileProps {
 
 function DraggableTableTile({ tile, groupId, children }: DraggableTableTileProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id:   `table-tile-${tile.id}`,
+    id:   `table-tile-${groupId}-${tile.id}`,
     data: { type: 'table-tile', tileId: tile.id, fromGroupId: groupId },
   })
 
