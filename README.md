@@ -2,6 +2,8 @@
 
 A browser-based implementation of **Uno Rummy Up** — the classic Mattel tile game combining Rummy mechanics with Uno special cards. Play against zoo-creature CPU opponents of varying difficulty, from Ziggy the bumbling Zebra to Leo the ferocious Lion.
 
+Play it here: https://uno-rummy.netlify.app/
+
 ---
 
 ## Gameplay
