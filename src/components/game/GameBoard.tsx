@@ -13,6 +13,7 @@ import { arrayMove } from '@dnd-kit/sortable'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useGameStore } from '@/store/gameStore'
 import type { LastFiredEffect, Player } from '@/engine/types'
+import { TILE_COLORS, SELECTED_COLOR } from '@/styles/colors'
 import { moveTileBetweenGroups, createGroupFromTiles, moveGroup, canReplaceWild } from '@/engine/manipulationEngine'
 import { isValidSet, findValidPlays } from '@/engine/validationEngine'
 import { findFreePosition } from '@/engine/deckGenerator'
@@ -35,6 +36,7 @@ export default function GameBoard() {
   const tilesPlayedThisTurn = useGameStore(s => s.tilesPlayedThisTurn)
   const turnDirection       = useGameStore(s => s.turnDirection)
   const lastFiredEffect     = useGameStore(s => s.lastFiredEffect)
+  const unoPenaltyFiredAt   = useGameStore(s => s.unoPenaltyFiredAt)
 
   const playTilesFromRack = useGameStore(s => s.playTilesFromRack)
   const rearrangeTable    = useGameStore(s => s.rearrangeTable)
@@ -92,7 +94,20 @@ export default function GameBoard() {
   useEffect(() => {
     if (!lastFiredEffect) return
     showBanner(formatEffectBanner(lastFiredEffect, humanPlayer?.name ?? 'You'))
+    switch (lastFiredEffect.type) {
+      case 'skip':         play('skip');        break
+      case 'draw2':        play('drawPenalty'); break
+      case 'wildDrawFour': play('drawPenalty'); break
+      case 'reverse':      play('specialPlay'); break
+    }
   }, [lastFiredEffect]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── UNO penalty sound ────────────────────────────────────
+  useEffect(() => {
+    if (unoPenaltyFiredAt === 0) return
+    play('unoPenalty')
+    showBanner('You forgot to call UNO! Draw 2 tiles.')
+  }, [unoPenaltyFiredAt]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Rack order state (for manual reordering) ────────────
   useEffect(() => {
@@ -201,6 +216,14 @@ export default function GameBoard() {
     play('tileDraw')
     showBanner('You drew a tile')
     drawTile()
+  }
+
+  // ── Give Up handler (womp womp + confirm) ────────────────
+  function handleGiveUp() {
+    if (window.confirm('Give up and return to the start screen?')) {
+      play('giveUp')
+      resetGame()
+    }
   }
 
   // ── UNO handler (banner + sound) ─────────────────────────
@@ -440,7 +463,7 @@ export default function GameBoard() {
               onDraw={handleDraw}
               onCallUno={handleCallUno}
               onCancel={cancelTurn}
-              onGiveUp={() => { if (window.confirm('Give up and return to the start screen?')) resetGame() }}
+              onGiveUp={handleGiveUp}
               onHint={handleHint}
               selectedIds={selectedIds}
               onToggleSelect={handleToggleSelect}
@@ -518,30 +541,36 @@ function CenterBanner({ message, onDone }: { message: string; onDone: () => void
   )
 }
 
-// ── Confetti burst ───────────────────────────────────────────
+// ── Falling confetti ─────────────────────────────────────────
 
-function Confetti() {
-  const COLORS = ['#D72600', '#0956BF', '#379711', '#ECD407', '#9333EA', '#fff']
-  const particles = Array.from({ length: 48 }, (_, i) => ({
+export function Confetti() {
+  const COLORS = [TILE_COLORS.red, TILE_COLORS.blue, TILE_COLORS.green, TILE_COLORS.yellow, SELECTED_COLOR, '#ffffff']
+  const particles = Array.from({ length: 80 }, (_, i) => ({
     id: i,
     color: COLORS[i % COLORS.length],
-    x: (Math.random() - 0.5) * 700,
-    y: -(180 + Math.random() * 340),
+    startX: Math.random() * 100, // vw %
+    drift: (Math.random() - 0.5) * 200,
     rotate: Math.random() * 720 * (Math.random() > 0.5 ? 1 : -1),
-    delay: Math.random() * 0.35,
-    size: 6 + Math.random() * 6,
+    delay: Math.random() * 1.5,
+    duration: 2.2 + Math.random() * 1.2,
+    width: 6 + Math.random() * 6,
+    height: 10 + Math.random() * 8,
   }))
   return (
-    <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 50 }}>
+    <div className="fixed inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 50 }}>
       {particles.map(p => (
         <motion.div
           key={p.id}
-          initial={{ x: 0, y: 0, opacity: 1, rotate: 0 }}
-          animate={{ x: p.x, y: p.y, opacity: 0, rotate: p.rotate }}
-          transition={{ duration: 1.4, delay: p.delay, ease: 'easeOut' }}
+          initial={{ x: 0, y: -20, opacity: 1, rotate: 0 }}
+          animate={{ x: p.drift, y: '110vh', opacity: 0, rotate: p.rotate }}
+          transition={{ duration: p.duration, delay: p.delay, ease: 'linear' }}
           style={{
-            position: 'absolute', top: '50%', left: '50%',
-            width: p.size, height: p.size, borderRadius: 2,
+            position: 'absolute',
+            left: `${p.startX}%`,
+            top: 0,
+            width: p.width,
+            height: p.height,
+            borderRadius: 2,
             background: p.color,
           }}
         />

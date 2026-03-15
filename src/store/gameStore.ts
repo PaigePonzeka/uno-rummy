@@ -122,6 +122,7 @@ const initialState: GameState = {
   turnDirection:        1,
   pendingEffect:       null,
   lastFiredEffect:     null,
+  unoPenaltyFiredAt:   0,
   roundNumber:         0,
   scoreHistory:        [],
   lastAction:          null,
@@ -641,6 +642,7 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
     const { players, currentPlayerIndex, turnDirection, pendingEffect } = get()
 
     // Apply UNO penalty for any player who still has unoCallPending
+    const humanGotPenalty = players[0]?.unoCallPending === true
     const penaltyPlayers = applyUnoPenalties(players, get().drawPile)
 
     let nextIndex = nextPlayerIndex(currentPlayerIndex, players.length, turnDirection)
@@ -667,11 +669,12 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
       nextIndex = nextPlayerIndex(nextIndex, players.length, newDirection)
     }
 
-    set({
-      players:       penaltyPlayers.players,
-      drawPile:      penaltyPlayers.drawPile,
-      turnDirection: newDirection,
-    })
+    set(s => ({
+      players:           penaltyPlayers.players,
+      drawPile:          penaltyPlayers.drawPile,
+      turnDirection:     newDirection,
+      unoPenaltyFiredAt: humanGotPenalty ? s.unoPenaltyFiredAt + 1 : s.unoPenaltyFiredAt,
+    }))
 
     if (pendingEffect) {
       get()._applyPendingEffect()

@@ -143,21 +143,25 @@ function sortRunTiles(tiles: Tile[]): Tile[] {
   const nonWilds = tiles.filter(t => !t.isWild).sort((a, b) => a.slot - b.slot)
   const wilds    = tiles.filter(t => t.isWild)
   if (wilds.length === 0) return nonWilds
+  if (nonWilds.length === 0) return wilds
+
+  const maxSlot    = nonWilds[nonWilds.length - 1].slot
+  const windowSize = tiles.length
+
+  // Anchor the window as far right as possible while keeping it within [1, 12].
+  // This ensures extra wilds extend LEFT (before the non-wild span) rather than
+  // right past slot 12.
+  const windowStart = Math.max(1, maxSlot - windowSize + 1)
 
   const usedSlots = new Set(nonWilds.map(t => t.slot))
-  const minSlot   = nonWilds[0]?.slot ?? 1
-  const maxSlot   = nonWilds[nonWilds.length - 1]?.slot ?? 12
-
-  const gaps: number[] = []
-  for (let s = minSlot; s <= maxSlot; s++) {
-    if (!usedSlots.has(s)) gaps.push(s)
+  const freeSlots: number[] = []
+  for (let s = windowStart; s < windowStart + windowSize; s++) {
+    if (!usedSlots.has(s)) freeSlots.push(s)
   }
 
-  // Assign each wild to its gap slot; extras extend the run beyond maxSlot
   const entries: { slot: number; tile: Tile }[] = nonWilds.map(t => ({ slot: t.slot, tile: t }))
   wilds.forEach((wild, i) => {
-    const gapSlot = gaps[i] !== undefined ? gaps[i] : maxSlot + (i - gaps.length + 1)
-    entries.push({ slot: gapSlot, tile: wild })
+    entries.push({ slot: freeSlots[i], tile: wild })
   })
 
   return entries.sort((a, b) => a.slot - b.slot).map(e => e.tile)

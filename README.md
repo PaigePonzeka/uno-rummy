@@ -93,9 +93,49 @@ npm run preview
     │   └── colors.ts     Uno color palette constants
     │
     └── assets/
-        ├── sounds/       .mp3 sound effects
+        ├── sounds/       .ogg sound effects
         └── avatars/      SVG zoo creature avatars
 ```
+
+---
+
+## Screens
+
+### Game Screens
+
+The app uses a phase-based state machine — screens advance automatically as you play:
+
+| Screen | How to reach |
+|--------|-------------|
+| **Welcome** | Default on load; or "Main Menu" from Game Over |
+| **Setup** | Click "Let's Play" on the Welcome screen |
+| **Game** | Pick creatures and confirm on the Setup screen |
+| **Round End** | Win a round — shows scores and a "Next Round" button |
+| **Game Over** | First player reaches 200 points |
+
+### In-Game Controls
+
+| Control | Action |
+|---------|--------|
+| Drag tile → board | Play a tile from your rack |
+| Click tile | Select / deselect |
+| **End Turn** (Space) | Commit your plays for this turn |
+| **Draw Tile** (D) | Draw one tile from the pile |
+| **Hint** | Suggest the best available play |
+| **Reset Board** (Esc) | Undo all tile placements this turn |
+| **UNO!** | Call UNO when you have one tile left |
+| 🔊 / 🔇 | Toggle sound on/off |
+| **Give Up** | Resign and return to the Welcome screen |
+| **▼ / ▲** (chevron) | Collapse / expand your tile rack |
+
+### Developer Pages
+
+Navigate to these URLs while the dev server is running:
+
+| URL | Page |
+|-----|------|
+| `/#/dev/sounds` | **Sound Test** — play every sound effect with descriptions |
+| `/#/dev/tiles` | **Tile Gallery** — view all tile designs including backs |
 
 ---
 
@@ -128,7 +168,7 @@ See `CLAUDE.md` for full instructions.
 
 ## Adding New Sounds
 
-1. Place `.mp3` in `src/assets/sounds/`
+1. Place `.ogg` in `src/assets/sounds/`
 2. Add key + path to `SOUNDS` in `src/hooks/useSound.ts`
 3. Call `play('{key}')` where needed
 

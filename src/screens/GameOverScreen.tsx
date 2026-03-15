@@ -1,9 +1,11 @@
 import { useEffect } from 'react'
 import { motion } from 'framer-motion'
+import { Trophy, RotateCcw, Home } from 'lucide-react'
 import { useGameStore } from '@/store/gameStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import Button from '@/components/ui/Button'
 import { CREATURES } from '@/components/ui/Avatar'
+import { Confetti } from '@/components/game/GameBoard'
 import type { ZooCreatureKey } from '@/engine/types'
 
 export default function GameOverScreen() {
@@ -37,15 +39,19 @@ export default function GameOverScreen() {
 
   return (
     <div className="h-screen w-screen felt-table flex items-center justify-center">
+      {isHumanWinner && <Confetti />}
+
       <motion.div
         initial={{ scale: 0.8, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ type: 'spring', stiffness: 200, damping: 20 }}
-        className="bg-gray-900/95 border border-white/10 rounded-2xl p-8 max-w-md w-full mx-4 text-center shadow-2xl"
+        className="bg-gray-900/95 border border-white/10 rounded-2xl p-8 max-w-md w-full mx-4 text-center shadow-2xl relative z-10"
       >
         {/* Winner announcement */}
-        <div className="text-6xl mb-4">
-          {isHumanWinner ? '🏆' : getWinnerEmoji(winner.creatureKey as ZooCreatureKey)}
+        <div className="text-6xl mb-4 flex justify-center">
+          {isHumanWinner
+            ? <Trophy size={64} className="text-yellow-400" />
+            : <span>{getWinnerEmoji(winner.creatureKey as ZooCreatureKey)}</span>}
         </div>
         <h1 className="text-3xl font-black text-white mb-2">
           {isHumanWinner ? 'You Won!' : `${winner.name} Wins!`}
@@ -80,10 +86,14 @@ export default function GameOverScreen() {
         {/* Actions */}
         <div className="flex flex-col gap-3">
           <Button fullWidth size="lg" onClick={playAgain}>
-            Play Again
+            <span className="flex items-center justify-center gap-2">
+              <RotateCcw size={16} /> Play Again
+            </span>
           </Button>
           <Button variant="ghost" fullWidth onClick={() => _setPhase('WELCOME')}>
-            Main Menu
+            <span className="flex items-center justify-center gap-2">
+              <Home size={16} /> Main Menu
+            </span>
           </Button>
         </div>
       </motion.div>

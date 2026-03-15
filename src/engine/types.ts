@@ -157,6 +157,7 @@ export interface GameState {
   turnDirection: 1 | -1
   pendingEffect: PendingEffect | null
   lastFiredEffect: LastFiredEffect | null
+  unoPenaltyFiredAt: number
   roundNumber: number
   scoreHistory: RoundScore[]
   lastAction: GameAction | null

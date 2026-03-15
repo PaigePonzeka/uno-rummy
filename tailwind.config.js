@@ -12,7 +12,7 @@ export default {
           red:    '#D72600',
           blue:   '#0956BF',
           green:  '#379711',
-          yellow: '#ECD407',
+          yellow: '#C9A800',
           purple: '#9333EA',
         },
         felt: {

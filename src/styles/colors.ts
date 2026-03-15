@@ -5,7 +5,7 @@ export const TILE_COLORS = {
   red:    '#D72600',
   blue:   '#0956BF',
   green:  '#379711',
-  yellow: '#ECD407',
+  yellow: '#C9A800',
 } as const
 
 export type TileColorHex = typeof TILE_COLORS[keyof typeof TILE_COLORS]

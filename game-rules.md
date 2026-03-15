@@ -54,7 +54,7 @@ The tile numbers run 1–12, but slots **2, 5, and 7 are occupied by special til
 | Red | #D72600 |
 | Blue | #0956BF |
 | Green | #379711 |
-| Yellow | #ECD407 |
+| Yellow | #C9A800 |
 
 ### Other Components
 - 1 tile rack per player (holds tiles upright, hidden from opponents)
